@@ -93,10 +93,14 @@ export function AdminSchedule() {
 
     if (result.unscheduled > 0) {
       setMsg(
-        `Ikke nok tid: ${result.unscheduled} av ${result.pairingsCount} kamper kunne ikke plasseres. ` +
-          `Legg til flere dager, lengre halltid eller flere baner (${check.slotsCount} kampplasser, ` +
-          `trengs minst ca. ${slicesNeeded} tidslufter).`
+        `Ikke nok tid: ${result.unscheduled} av ${result.pairingsCount} kamper kunne ikke plasseres ` +
+          `(ingen lag spiller to kamper på rad). Legg til flere dager, lengre halltid eller flere baner.`
       );
+      return;
+    }
+
+    if (result.backToBackTeams > 0) {
+      setMsg('Noen lag ble likevel satt opp med kamper for tett — prøv mer halltid.');
       return;
     }
 
@@ -304,9 +308,8 @@ export function AdminSchedule() {
         <p style={{ fontSize: '0.85rem', color: 'var(--grey-600)' }}>
           {getMatchDurationLabel(params.matchFormat)} + {params.periodBreak} min pause mellom
           perioder. Ca. {slotDurationMinutes(params)} min per kamp inkl. pause.{' '}
-          <strong>{slots}</strong> kampplasser totalt ({params.courtCount} bane
-          {params.courtCount > 1 ? 'r' : ''} × {params.days.length} dag
-          {params.days.length > 1 ? 'er' : ''}).
+          <strong>{slots}</strong> kampplasser totalt. Ingen lag spiller to kamper på rad
+          (minst én tidsluft mellom hver kamp).
         </p>
 
         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginTop: '1rem' }}>
