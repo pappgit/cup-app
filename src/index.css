@@ -1016,6 +1016,42 @@ img {
   margin-bottom: 0;
 }
 
+.schedule-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1.15rem;
+}
+
+.schedule-toolbar-select {
+  margin-bottom: 0;
+  flex: 1;
+}
+
+.schedule-toolbar-btn {
+  align-self: flex-start;
+  white-space: nowrap;
+}
+
+.schedule-results-hint {
+  margin: -0.5rem 0 1rem;
+  padding: 0.55rem 0.85rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--purple-muted);
+  background: var(--yellow-soft);
+  border-radius: var(--radius-xs);
+  border-left: 3px solid var(--yellow);
+}
+
+@media (min-width: 480px) {
+  .schedule-toolbar {
+    flex-direction: row;
+    align-items: flex-end;
+    flex-wrap: wrap;
+  }
+}
+
 .score-input {
   width: 3.25rem;
   min-height: var(--touch-min);

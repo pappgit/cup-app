@@ -1,24 +1,24 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { MatchList } from '../components/MatchList';
+import { SCHEDULE_VIEW_ALL, ScheduleTeamFilter } from '../components/ScheduleTeamFilter';
 import { useCup } from '../hooks/useCup';
 import { getFavoriteTeamId } from '../lib/storage';
 
 export function MatchesPage() {
   const { cup } = useCup();
-  const favoriteId = getFavoriteTeamId();
-  const [filterTeam, setFilterTeam] = useState<string>(favoriteId ?? '');
+  const [viewFilter, setViewFilter] = useState(() => getFavoriteTeamId() ?? SCHEDULE_VIEW_ALL);
 
   const teamName = (id: string) => cup.teams.find((t) => t.id === id)?.name ?? 'Ukjent lag';
 
-  let matches = [...cup.matches].sort(
-    (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
-  );
-
-  if (filterTeam) {
-    matches = matches.filter(
-      (m) => m.homeTeamId === filterTeam || m.awayTeamId === filterTeam
+  const matches = useMemo(() => {
+    const sorted = [...cup.matches].sort(
+      (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
     );
-  }
+    if (!viewFilter) return sorted;
+    return sorted.filter(
+      (m) => m.homeTeamId === viewFilter || m.awayTeamId === viewFilter
+    );
+  }, [cup.matches, viewFilter]);
 
   return (
     <>
@@ -27,33 +27,24 @@ export function MatchesPage() {
         {matches.length > 0 && (
           <p className="page-subtitle">
             {matches.length} kamp{matches.length !== 1 ? 'er' : ''}
-            {filterTeam ? ` · ${teamName(filterTeam)}` : ''}
+            {viewFilter ? ` · ${teamName(viewFilter)}` : ' · hele programmet'}
           </p>
         )}
       </header>
 
       {cup.teams.length > 0 && (
         <div className="card filter-bar">
-          <div className="form-group">
-            <label>Filtrer på lag</label>
-            <select value={filterTeam} onChange={(e) => setFilterTeam(e.target.value)}>
-              <option value="">Alle lag</option>
-              {cup.teams.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <ScheduleTeamFilter
+            teams={cup.teams}
+            value={viewFilter}
+            onChange={setViewFilter}
+            id="matches-team-filter"
+          />
         </div>
       )}
 
       <div className="card">
-        <MatchList
-          matches={matches}
-          teamName={teamName}
-          favoriteTeamId={favoriteId}
-        />
+        <MatchList matches={matches} teamName={teamName} favoriteTeamId={viewFilter || null} />
       </div>
     </>
   );
