@@ -52,16 +52,110 @@ export function countScheduleSlots(params: ScheduleParams): number {
   return buildTimeSlices(p).length * p.courtCount;
 }
 
+type Pairing = { home: string; away: string };
+
+function pairingKey(a: string, b: string): string {
+  return a < b ? `${a}-${b}` : `${b}-${a}`;
+}
+
+/** Standard round-robin-runder (serie) — roterer lag for varierte motstandere. */
+function addSeriesRoundPairings(
+  teamIds: string[],
+  gamesPerTeam: number,
+  gamesPlayed: Map<string, number>,
+  opponentCount: Map<string, number>,
+  pairings: Pairing[]
+): void {
+  let roster = [...teamIds];
+
+  for (let round = 0; round < gamesPerTeam; round++) {
+    const m = roster.length;
+    for (let i = 0; i < Math.floor(m / 2); i++) {
+      const a = roster[i];
+      const b = roster[m - 1 - i];
+      if (a === b) continue;
+      if ((gamesPlayed.get(a) ?? 0) >= gamesPerTeam || (gamesPlayed.get(b) ?? 0) >= gamesPerTeam) {
+        continue;
+      }
+
+      const home = round % 2 === 0 ? a : b;
+      const away = home === a ? b : a;
+      pairings.push({ home, away });
+      gamesPlayed.set(home, (gamesPlayed.get(home) ?? 0) + 1);
+      gamesPlayed.set(away, (gamesPlayed.get(away) ?? 0) + 1);
+      const k = pairingKey(home, away);
+      opponentCount.set(k, (opponentCount.get(k) ?? 0) + 1);
+    }
+
+    if (m > 2) {
+      const fixed = roster[0];
+      const tail = roster.slice(1);
+      tail.unshift(tail.pop()!);
+      roster = [fixed, ...tail];
+    }
+  }
+}
+
+/** Fyll opp til alle har gamesPerTeam kamper — alltid mulig når n≥2 og n×kamper er partall. */
+function fillPairingsGreedy(
+  teams: Team[],
+  gamesPerTeam: number,
+  gamesPlayed: Map<string, number>,
+  opponentCount: Map<string, number>,
+  pairings: Pairing[]
+): void {
+  const n = teams.length;
+  const totalNeeded = (n * gamesPerTeam) / 2;
+  const maxIter = totalNeeded * n * 4;
+  let iter = 0;
+
+  while (pairings.length < totalNeeded && iter < maxIter) {
+    let best: { home: string; away: string; score: number; need: number } | null = null;
+
+    for (const t1 of teams) {
+      const g1 = gamesPlayed.get(t1.id) ?? 0;
+      if (g1 >= gamesPerTeam) continue;
+
+      for (const t2 of teams) {
+        if (t1.id === t2.id) continue;
+        const g2 = gamesPlayed.get(t2.id) ?? 0;
+        if (g2 >= gamesPerTeam) continue;
+
+        const score = opponentCount.get(pairingKey(t1.id, t2.id)) ?? 0;
+        const need = g1 + g2;
+
+        if (
+          !best ||
+          score < best.score ||
+          (score === best.score && need > best.need)
+        ) {
+          const home = g1 <= g2 ? t1.id : t2.id;
+          const away = home === t1.id ? t2.id : t1.id;
+          best = { home, away, score, need };
+        }
+      }
+    }
+
+    if (!best) break;
+
+    pairings.push({ home: best.home, away: best.away });
+    gamesPlayed.set(best.home, (gamesPlayed.get(best.home) ?? 0) + 1);
+    gamesPlayed.set(best.away, (gamesPlayed.get(best.away) ?? 0) + 1);
+    const k = pairingKey(best.home, best.away);
+    opponentCount.set(k, (opponentCount.get(k) ?? 0) + 1);
+    iter++;
+  }
+}
+
 /** Generate pairings so each team plays exactly `gamesPerTeam` matches. */
 export function generatePairings(
   teams: Team[],
   gamesPerTeam: number,
   seriesPlay: boolean
-): { home: string; away: string }[] {
+): Pairing[] {
   const n = teams.length;
   if (n < 2) return [];
 
-  // To lag: bytt hjemme/borte — alltid mulig
   if (n === 2) {
     const [a, b] = teams;
     return Array.from({ length: gamesPerTeam }, (_, i) =>
@@ -71,81 +165,30 @@ export function generatePairings(
     );
   }
 
-  const pairings: { home: string; away: string }[] = [];
+  const pairings: Pairing[] = [];
   const gamesPlayed = new Map<string, number>();
+  const opponentCount = new Map<string, number>();
   teams.forEach((t) => gamesPlayed.set(t.id, 0));
 
   if (seriesPlay) {
-    const ids = teams.map((t) => t.id);
-    let round = 0;
-    const maxRounds = gamesPerTeam;
-
-    while (round < maxRounds) {
-      const rotated = [...ids];
-      if (round % 2 === 1) rotated.reverse();
-
-      for (let i = 0; i < Math.floor(n / 2); i++) {
-        const home = rotated[i];
-        const away = rotated[n - 1 - i];
-        if (home === away) continue;
-        if ((gamesPlayed.get(home) ?? 0) >= gamesPerTeam) continue;
-        if ((gamesPlayed.get(away) ?? 0) >= gamesPerTeam) continue;
-
-        pairings.push({
-          home: round % 2 === 0 ? home : away,
-          away: round % 2 === 0 ? away : home,
-        });
-        gamesPlayed.set(home, (gamesPlayed.get(home) ?? 0) + 1);
-        gamesPlayed.set(away, (gamesPlayed.get(away) ?? 0) + 1);
-      }
-
-      if (n > 2) {
-        const last = ids.pop()!;
-        ids.splice(1, 0, last);
-      }
-      round++;
-    }
+    addSeriesRoundPairings(
+      teams.map((t) => t.id),
+      gamesPerTeam,
+      gamesPlayed,
+      opponentCount,
+      pairings
+    );
   }
 
-  const opponentCount = new Map<string, number>();
-  const key = (a: string, b: string) => (a < b ? `${a}-${b}` : `${b}-${a}`);
-
-  for (const pr of pairings) {
-    const k = key(pr.home, pr.away);
-    opponentCount.set(k, (opponentCount.get(k) ?? 0) + 1);
-  }
-
-  let attempts = 0;
-  const maxAttempts = n * gamesPerTeam * 10;
-
-  while (attempts < maxAttempts) {
-    const needMore = teams.filter((t) => (gamesPlayed.get(t.id) ?? 0) < gamesPerTeam);
-    if (needMore.length === 0) break;
-
-    const t1 = needMore[attempts % needMore.length];
-    const others = teams
-      .filter((t) => t.id !== t1.id && (gamesPlayed.get(t.id) ?? 0) < gamesPerTeam)
-      .sort((a, b) => {
-        const ka = key(t1.id, a.id);
-        const kb = key(t1.id, b.id);
-        return (opponentCount.get(ka) ?? 0) - (opponentCount.get(kb) ?? 0);
-      });
-
-    if (others.length === 0) break;
-
-    const t2 = others[0];
-    const home = (gamesPlayed.get(t1.id) ?? 0) <= (gamesPlayed.get(t2.id) ?? 0) ? t1.id : t2.id;
-    const away = home === t1.id ? t2.id : t1.id;
-
-    pairings.push({ home, away });
-    gamesPlayed.set(home, (gamesPlayed.get(home) ?? 0) + 1);
-    gamesPlayed.set(away, (gamesPlayed.get(away) ?? 0) + 1);
-    const k = key(home, away);
-    opponentCount.set(k, (opponentCount.get(k) ?? 0) + 1);
-    attempts++;
-  }
+  fillPairingsGreedy(teams, gamesPerTeam, gamesPlayed, opponentCount, pairings);
 
   return pairings;
+}
+
+/** Sjekk om ønsket kamper per lag er matematisk mulig. */
+export function isGamesPerTeamPossible(teamCount: number, gamesPerTeam: number): boolean {
+  if (teamCount < 2) return false;
+  return (teamCount * gamesPerTeam) % 2 === 0;
 }
 
 function countGamesPerTeam(
@@ -196,6 +239,13 @@ export function validateSchedule(teams: Team[], rawParams: ScheduleParams): Sche
     errors.push(`Velg nøyaktig ${params.courtCount} bane(r).`);
   }
 
+  if (!isGamesPerTeamPossible(teams.length, gamesPerTeam)) {
+    errors.push(
+      `Med ${teams.length} lag og ${gamesPerTeam} kamper per lag blir totalt antall kamper et oddetall — det går ikke. ` +
+        `Velg et partall antall kamper per lag, eller endre antall lag.`
+    );
+  }
+
   const slices = buildTimeSlices(params);
   const timeSlicesCount = slices.length;
   const slotsCount = timeSlicesCount * params.courtCount;
@@ -209,14 +259,14 @@ export function validateSchedule(teams: Team[], rawParams: ScheduleParams): Sche
   const pairings = generatePairings(teams, gamesPerTeam, params.seriesPlay);
   const gamesCounts = countGamesPerTeam(pairings, teams);
 
-  for (const t of teams) {
-    const g = gamesCounts.get(t.id) ?? 0;
-    if (g < gamesPerTeam) {
-      errors.push(
-        `Med ${teams.length} lag kan vi bare lage ${g} kamper per lag (mål: ${gamesPerTeam}). ` +
-          `Velg færre kamper per lag, eller legg til flere lag.`
-      );
-    }
+  const shortTeams = teams.filter((t) => (gamesCounts.get(t.id) ?? 0) < gamesPerTeam);
+  if (shortTeams.length > 0) {
+    const example = shortTeams[0];
+    const g = gamesCounts.get(example.id) ?? 0;
+    errors.push(
+      `Kunne ikke fullføre kampfordeling (${g} av ${gamesPerTeam} kamper for noen lag). ` +
+        `Dette bør ikke skje — prøv å generere på nytt, eller kontakt support.`
+    );
   }
 
   if (pairings.length === 0) {
