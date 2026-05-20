@@ -11,7 +11,7 @@ export function AdminDashboard() {
           <strong>{cup.name}</strong>
         </p>
         <p>
-          {cup.teams.length} av {cup.teamCount} lag registrert
+          {cup.teams.length} lag registrert
         </p>
         <p>{cup.matches.length} kamper i programmet</p>
       </div>

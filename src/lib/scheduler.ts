@@ -13,10 +13,9 @@ export function slotDurationMinutes(params: ScheduleParams): number {
 }
 
 function parseTime(dateStr: string, timeStr: string): Date {
+  const [y, mo, d] = dateStr.split('-').map(Number);
   const [h, m] = timeStr.split(':').map(Number);
-  const d = new Date(dateStr + 'T00:00:00');
-  d.setHours(h, m, 0, 0);
-  return d;
+  return new Date(y, mo - 1, d, h, m, 0, 0);
 }
 
 function formatTime(d: Date): string {
@@ -27,7 +26,6 @@ interface TimeSlice {
   start: Date;
 }
 
-/** Tidslufter per dag der opptil courtCount kamper kan spilles parallelt. */
 function buildTimeSlices(params: ScheduleParams): TimeSlice[] {
   const p = normalizeScheduleParams(params);
   const slotMin = slotDurationMinutes(p);
@@ -37,6 +35,8 @@ function buildTimeSlices(params: ScheduleParams): TimeSlice[] {
   for (const day of p.days) {
     let current = parseTime(day.date, day.timeFrom);
     const dayEnd = parseTime(day.date, day.timeTo);
+
+    if (dayEnd.getTime() <= current.getTime()) continue;
 
     while (current.getTime() + matchDur * 60_000 <= dayEnd.getTime()) {
       slices.push({ start: new Date(current) });
@@ -53,7 +53,7 @@ export function countScheduleSlots(params: ScheduleParams): number {
 }
 
 /** Generate pairings so each team plays exactly `gamesPerTeam` matches. */
-function generatePairings(
+export function generatePairings(
   teams: Team[],
   gamesPerTeam: number,
   seriesPlay: boolean
@@ -61,11 +61,21 @@ function generatePairings(
   const n = teams.length;
   if (n < 2) return [];
 
+  // To lag: bytt hjemme/borte — alltid mulig
+  if (n === 2) {
+    const [a, b] = teams;
+    return Array.from({ length: gamesPerTeam }, (_, i) =>
+      i % 2 === 0
+        ? { home: a.id, away: b.id }
+        : { home: b.id, away: a.id }
+    );
+  }
+
   const pairings: { home: string; away: string }[] = [];
   const gamesPlayed = new Map<string, number>();
   teams.forEach((t) => gamesPlayed.set(t.id, 0));
 
-  if (seriesPlay && n >= 2) {
+  if (seriesPlay) {
     const ids = teams.map((t) => t.id);
     let round = 0;
     const maxRounds = gamesPerTeam;
@@ -138,19 +148,128 @@ function generatePairings(
   return pairings;
 }
 
+function countGamesPerTeam(
+  pairings: { home: string; away: string }[],
+  teams: Team[]
+): Map<string, number> {
+  const counts = new Map<string, number>();
+  teams.forEach((t) => counts.set(t.id, 0));
+  for (const p of pairings) {
+    counts.set(p.home, (counts.get(p.home) ?? 0) + 1);
+    counts.set(p.away, (counts.get(p.away) ?? 0) + 1);
+  }
+  return counts;
+}
+
+/** Minimum tidslufter (uten hensyn til bane) for å plassere alle kamper. */
+export function minTimeSlicesNeeded(teamCount: number, matchCount: number): number {
+  if (teamCount <= 2) return matchCount;
+  return Math.ceil(matchCount / Math.max(1, Math.floor(teamCount / 2)));
+}
+
+export interface ScheduleValidation {
+  ok: boolean;
+  errors: string[];
+  pairingsCount: number;
+  timeSlicesCount: number;
+  slotsCount: number;
+  gamesPerTeam: number;
+}
+
+export function validateSchedule(teams: Team[], rawParams: ScheduleParams): ScheduleValidation {
+  const params = normalizeScheduleParams(rawParams);
+  const errors: string[] = [];
+  const gamesPerTeam = params.gamesPerTeam;
+
+  if (teams.length < 2) {
+    return {
+      ok: false,
+      errors: ['Legg inn minst 2 lag under Admin → Lag.'],
+      pairingsCount: 0,
+      timeSlicesCount: 0,
+      slotsCount: 0,
+      gamesPerTeam,
+    };
+  }
+
+  if (params.courts.length !== params.courtCount) {
+    errors.push(`Velg nøyaktig ${params.courtCount} bane(r).`);
+  }
+
+  const slices = buildTimeSlices(params);
+  const timeSlicesCount = slices.length;
+  const slotsCount = timeSlicesCount * params.courtCount;
+
+  if (timeSlicesCount === 0) {
+    errors.push(
+      'Ingen halltid funnet. Sjekk at «tid til» er etter «tid fra» på hver cup-dag.'
+    );
+  }
+
+  const pairings = generatePairings(teams, gamesPerTeam, params.seriesPlay);
+  const gamesCounts = countGamesPerTeam(pairings, teams);
+
+  for (const t of teams) {
+    const g = gamesCounts.get(t.id) ?? 0;
+    if (g < gamesPerTeam) {
+      errors.push(
+        `Med ${teams.length} lag kan vi bare lage ${g} kamper per lag (mål: ${gamesPerTeam}). ` +
+          `Velg færre kamper per lag, eller legg til flere lag.`
+      );
+    }
+  }
+
+  if (pairings.length === 0) {
+    errors.push('Kunne ikke lage kamper med valgte innstillinger.');
+  }
+
+  const slicesNeeded = minTimeSlicesNeeded(teams.length, pairings.length);
+  if (timeSlicesCount > 0 && timeSlicesCount < slicesNeeded) {
+    errors.push(
+      `Ikke nok tid: minst ${slicesNeeded} tidslufter trengs for ${pairings.length} kamper med ${teams.length} lag, ` +
+        `men dere har ${timeSlicesCount} tidslufter (${slotsCount} kampplasser med ${params.courtCount} bane${params.courtCount > 1 ? 'r' : ''}). ` +
+        `Legg til flere dager, lengre halltid (tid fra–til) eller flere baner.`
+    );
+  }
+
+  return {
+    ok: errors.length === 0,
+    errors,
+    pairingsCount: pairings.length,
+    timeSlicesCount,
+    slotsCount,
+    gamesPerTeam,
+  };
+}
+
+export interface ScheduleResult {
+  matches: Match[];
+  unscheduled: number;
+  pairingsCount: number;
+}
+
 export function generateSchedule(teams: Team[], rawParams: ScheduleParams): Match[] {
+  return generateScheduleWithMeta(teams, rawParams).matches;
+}
+
+export function generateScheduleWithMeta(
+  teams: Team[],
+  rawParams: ScheduleParams
+): ScheduleResult {
   const params = normalizeScheduleParams(rawParams);
   const pairings = generatePairings(teams, params.gamesPerTeam, params.seriesPlay);
   const slices = buildTimeSlices(params);
   const courts = params.courts.slice(0, params.courtCount);
 
-  if (pairings.length === 0) return [];
+  if (pairings.length === 0 || slices.length === 0) {
+    return { matches: [], unscheduled: pairings.length, pairingsCount: pairings.length };
+  }
 
   const remaining = [...pairings];
   const matches: Match[] = [];
   let sliceIndex = 0;
   let unscheduledStreak = 0;
-  const maxStreak = slices.length * 2 + 10;
+  const maxStreak = slices.length + pairings.length + 10;
 
   while (remaining.length > 0 && sliceIndex < slices.length && unscheduledStreak < maxStreak) {
     const slice = slices[sliceIndex];
@@ -178,15 +297,15 @@ export function generateSchedule(teams: Team[], rawParams: ScheduleParams): Matc
       });
     }
 
-    if (scheduledInSlice > 0) {
-      unscheduledStreak = 0;
-    } else {
-      unscheduledStreak++;
-    }
+    unscheduledStreak = scheduledInSlice > 0 ? 0 : unscheduledStreak + 1;
     sliceIndex++;
   }
 
-  return matches;
+  return {
+    matches,
+    unscheduled: remaining.length,
+    pairingsCount: pairings.length,
+  };
 }
 
 export function getMatchDurationLabel(format: ScheduleParams['matchFormat']): string {

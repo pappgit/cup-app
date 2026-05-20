@@ -79,7 +79,7 @@ export const DEFAULT_SCHEDULE_PARAMS: ScheduleParams = {
 
 export const DEFAULT_CUP: CupData = {
   name: 'Tunet Cup',
-  teamCount: 8,
+  teamCount: 4,
   teams: [],
   scheduleParams: null,
   matches: [],

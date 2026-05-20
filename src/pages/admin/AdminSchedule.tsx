@@ -3,11 +3,13 @@ import { useCup } from '../../hooks/useCup';
 import type { CupDaySchedule, CourtCount, CupDays, ScheduleParams } from '../../types';
 import { AVAILABLE_COURTS, DEFAULT_SCHEDULE_PARAMS } from '../../types';
 import {
-  generateSchedule,
   formatMatchTime,
   getMatchDurationLabel,
   countScheduleSlots,
   slotDurationMinutes,
+  validateSchedule,
+  generateScheduleWithMeta,
+  minTimeSlicesNeeded,
 } from '../../lib/scheduler';
 import {
   normalizeScheduleParams,
@@ -62,32 +64,44 @@ export function AdminSchedule() {
   };
 
   const slots = countScheduleSlots(params);
+  const validation = useMemo(
+    () => validateSchedule(cup.teams, params),
+    [cup.teams, params]
+  );
+  const slicesNeeded = useMemo(
+    () => minTimeSlicesNeeded(cup.teams.length, validation.pairingsCount),
+    [cup.teams.length, validation.pairingsCount]
+  );
 
   const generate = async () => {
-    if (cup.teams.length < 2) {
-      setMsg('Legg inn minst 2 lag først');
-      return;
-    }
-    if (params.courts.length !== params.courtCount) {
-      setMsg(`Velg nøyaktig ${params.courtCount} bane(r)`);
-      return;
-    }
-
     const normalized = normalizeScheduleParams(params);
-    const matches = generateSchedule(cup.teams, normalized);
-    const needed = Math.ceil(
-      (cup.teams.length * normalized.gamesPerTeam) / 2
-    );
+    const check = validateSchedule(cup.teams, normalized);
 
-    if (matches.length < needed) {
-      setMsg(
-        `Generert ${matches.length} av ca. ${needed} kamper. Legg til flere dager/tider eller flere baner (${slots} tidspunkter tilgjengelig).`
-      );
-    } else {
-      setMsg(`Generert ${matches.length} kamper!`);
+    if (!check.ok) {
+      setMsg(check.errors.join(' '));
+      return;
     }
 
-    await update({ matches, scheduleParams: normalized });
+    const result = generateScheduleWithMeta(cup.teams, normalized);
+
+    if (result.matches.length === 0) {
+      setMsg(
+        'Ingen kamper ble plassert. Sjekk halltid (tid fra–til) og at det er nok tid i forhold til antall kamper per lag.'
+      );
+      return;
+    }
+
+    if (result.unscheduled > 0) {
+      setMsg(
+        `Ikke nok tid: ${result.unscheduled} av ${result.pairingsCount} kamper kunne ikke plasseres. ` +
+          `Legg til flere dager, lengre halltid eller flere baner (${check.slotsCount} kampplasser, ` +
+          `trengs minst ca. ${slicesNeeded} tidslufter).`
+      );
+      return;
+    }
+
+    await update({ matches: result.matches, scheduleParams: normalized });
+    setMsg(`Generert ${result.matches.length} kamper!`);
     setTimeout(() => setMsg(''), 5000);
   };
 
@@ -104,10 +118,28 @@ export function AdminSchedule() {
       {msg && (
         <div
           className={`alert ${
-            msg.includes('Generert') && !msg.includes(' av ca.') ? 'alert-success' : 'alert-error'
+            msg.startsWith('Generert ') ? 'alert-success' : 'alert-error'
           }`}
         >
           {msg}
+        </div>
+      )}
+
+      {cup.teams.length >= 2 && !validation.ok && (
+        <div className="alert alert-error" style={{ marginBottom: '1rem' }}>
+          <strong>Før du genererer:</strong>
+          <ul style={{ margin: '0.5rem 0 0', paddingLeft: '1.25rem' }}>
+            {validation.errors.map((e, i) => (
+              <li key={i}>{e}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {cup.teams.length >= 2 && validation.ok && (
+        <div className="alert alert-success" style={{ marginBottom: '1rem' }}>
+          Klar til å generere: {validation.pairingsCount} kamper, {validation.timeSlicesCount}{' '}
+          tidslufter, {validation.slotsCount} kampplasser.
         </div>
       )}
 

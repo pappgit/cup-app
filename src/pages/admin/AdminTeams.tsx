@@ -13,20 +13,20 @@ export function AdminTeams() {
   const addTeam = () => {
     const trimmed = name.trim();
     if (!trimmed) return;
-    if (cup.teams.length >= cup.teamCount) {
-      setMsg(`Maks ${cup.teamCount} lag`);
-      return;
-    }
+    const nextTeams = [...cup.teams, { id: newId(), name: trimmed }];
     update({
-      teams: [...cup.teams, { id: newId(), name: trimmed }],
+      teams: nextTeams,
+      teamCount: Math.max(cup.teamCount, nextTeams.length),
     });
     setName('');
     setMsg('');
   };
 
   const removeTeam = (id: string) => {
+    const nextTeams = cup.teams.filter((t) => t.id !== id);
     update({
-      teams: cup.teams.filter((t) => t.id !== id),
+      teams: nextTeams,
+      teamCount: Math.max(2, nextTeams.length),
       matches: cup.matches.filter((m) => m.homeTeamId !== id && m.awayTeamId !== id),
     });
   };
@@ -51,11 +51,11 @@ export function AdminTeams() {
             />
           </div>
           <div className="form-group">
-            <label>Antall lag</label>
+            <label>Planlagt maks antall lag (valgfritt)</label>
             <input
               type="number"
               min={2}
-              max={32}
+              max={64}
               value={cup.teamCount}
               onChange={(e) =>
                 update({ teamCount: Math.max(2, parseInt(e.target.value, 10) || 2) })
@@ -63,13 +63,17 @@ export function AdminTeams() {
             />
           </div>
         </div>
+        <p style={{ fontSize: '0.85rem', color: 'var(--grey-600)', margin: '0 0 1rem' }}>
+          Du legger inn så mange lag du vil — minimum 2 for kamprogram. Registrert nå:{' '}
+          <strong>{cup.teams.length}</strong> lag.
+        </p>
         <button type="button" className="btn btn-primary" onClick={saveSettings}>
           Lagre
         </button>
       </div>
 
       <div className="card">
-        <h2>Lag ({cup.teams.length}/{cup.teamCount})</h2>
+        <h2>Lag ({cup.teams.length} registrert)</h2>
         <div className="form-row cols-2" style={{ alignItems: 'end' }}>
           <div className="form-group">
             <label>Lagnavn</label>
@@ -80,18 +84,17 @@ export function AdminTeams() {
               placeholder="F.eks. Tunet G12"
             />
           </div>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={addTeam}
-            disabled={cup.teams.length >= cup.teamCount}
-          >
+          <button type="button" className="btn btn-secondary" onClick={addTeam}>
             Legg til lag
           </button>
         </div>
         <div className="team-chip-list" style={{ marginTop: '1rem' }}>
           {cup.teams.map((t) => (
-            <span key={t.id} className="team-chip" style={{ display: 'inline-flex', gap: '0.5rem', alignItems: 'center' }}>
+            <span
+              key={t.id}
+              className="team-chip"
+              style={{ display: 'inline-flex', gap: '0.5rem', alignItems: 'center' }}
+            >
               {t.name}
               <button
                 type="button"
