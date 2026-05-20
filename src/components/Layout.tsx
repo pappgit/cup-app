@@ -6,7 +6,7 @@ import { useAuth } from '../hooks/useAuth';
 
 export function Layout() {
   const [menuOpen, setMenuOpen] = useState(false);
-  const { cup } = useCup();
+  const { cup, error: cupError } = useCup();
   const { isAdmin } = useAuth();
 
   return (
@@ -18,6 +18,11 @@ export function Layout() {
         isAdmin={isAdmin}
       />
       <main className={`main-content ${menuOpen ? 'menu-open' : ''}`}>
+        {cupError && (
+          <div className="alert alert-error" style={{ marginBottom: '1rem' }}>
+            {cupError}
+          </div>
+        )}
         <div className="top-bar">
           <button
             type="button"

@@ -1,6 +1,39 @@
-import type { CupData, ScheduleParams } from '../types';
+import type { CupData, Match, ScheduleParams } from '../types';
 import { DEFAULT_CUP } from '../types';
 import { getCupSlug, supabase } from './supabase';
+
+function isValidUuid(id: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    id
+  );
+}
+
+async function persistMatches(
+  client: ReturnType<typeof requireClient>,
+  cupId: string,
+  matches: Match[]
+): Promise<void> {
+  const { error: delError } = await client.from('matches').delete().eq('cup_id', cupId);
+  if (delError) throw delError;
+  if (matches.length === 0) return;
+
+  const rows = matches.map((m) => ({
+    id: isValidUuid(m.id) ? m.id : crypto.randomUUID(),
+    cup_id: cupId,
+    home_team_id: m.homeTeamId,
+    away_team_id: m.awayTeamId,
+    start_time: m.startTime,
+    court: m.court ?? null,
+    round: m.round ?? null,
+  }));
+
+  let { error } = await client.from('matches').insert(rows);
+  if (error?.message?.includes('court')) {
+    const withoutCourt = rows.map(({ court: _c, ...rest }) => rest);
+    ({ error } = await client.from('matches').insert(withoutCourt));
+  }
+  if (error) throw error;
+}
 
 export interface CupRecord {
   id: string;
@@ -32,12 +65,25 @@ export async function fetchCup(): Promise<CupData & { cupId: string }> {
 
   const cupId = cupRow.id;
 
-  const [teamsRes, matchesRes, shopRes, sponsorsRes] = await Promise.all([
+  const [teamsRes, shopRes, sponsorsRes] = await Promise.all([
     client.from('teams').select('id, name, sort_order').eq('cup_id', cupId).order('sort_order'),
-    client.from('matches').select('id, home_team_id, away_team_id, start_time, round, court').eq('cup_id', cupId).order('start_time'),
     client.from('shop_items').select('id, name, price, description, available, sort_order').eq('cup_id', cupId).order('sort_order'),
     client.from('sponsors').select('id, name, logo_url, sort_order').eq('cup_id', cupId).order('sort_order'),
   ]);
+
+  let matchesRes = await client
+    .from('matches')
+    .select('id, home_team_id, away_team_id, start_time, round, court')
+    .eq('cup_id', cupId)
+    .order('start_time');
+
+  if (matchesRes.error?.message?.includes('court')) {
+    matchesRes = await client
+      .from('matches')
+      .select('id, home_team_id, away_team_id, start_time, round')
+      .eq('cup_id', cupId)
+      .order('start_time');
+  }
 
   if (teamsRes.error) throw teamsRes.error;
   if (matchesRes.error) throw matchesRes.error;
@@ -126,7 +172,6 @@ export async function persistCup(data: CupData, cupId?: string): Promise<string>
     .eq('id', id);
 
   const teamIds = data.teams.map((t) => t.id);
-  const matchIds = data.matches.map((m) => m.id);
   const shopIds = data.shopItems.map((s) => s.id);
   const sponsorIds = data.sponsors.map((s) => s.id);
 
@@ -150,28 +195,8 @@ export async function persistCup(data: CupData, cupId?: string): Promise<string>
     if (error) throw error;
   }
 
-  // Matches
-  if (data.matches.length > 0) {
-    const { error } = await client.from('matches').upsert(
-      data.matches.map((m) => ({
-        id: m.id,
-        cup_id: id,
-        home_team_id: m.homeTeamId,
-        away_team_id: m.awayTeamId,
-        start_time: m.startTime,
-        court: m.court ?? null,
-        round: m.round ?? null,
-      })),
-      { onConflict: 'id' }
-    );
-    if (error) throw error;
-  }
-  {
-    let q = client.from('matches').delete().eq('cup_id', id);
-    if (matchIds.length > 0) q = q.not('id', 'in', `(${matchIds.join(',')})`);
-    const { error } = await q;
-    if (error) throw error;
-  }
+  // Matches — erstatt hele programmet (sikrer publisering til forsiden)
+  await persistMatches(client, id, data.matches);
 
   // Shop
   if (data.shopItems.length > 0) {

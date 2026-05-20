@@ -113,6 +113,10 @@ export function CupProvider({ children }: { children: ReactNode }) {
         const id = await persistCup(next, cupIdRef.current || undefined);
         cupIdRef.current = id;
         setCupId(id);
+        const fresh = await fetchCup();
+        cupIdRef.current = fresh.cupId;
+        setCupId(fresh.cupId);
+        setCup(stripCupMeta(fresh));
         setError(null);
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Kunne ikke lagre');

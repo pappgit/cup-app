@@ -288,7 +288,7 @@ export function generateScheduleWithMeta(
       scheduledInSlice++;
 
       matches.push({
-        id: `match-${matches.length}-${Date.now()}`,
+        id: crypto.randomUUID(),
         homeTeamId: p.home,
         awayTeamId: p.away,
         startTime: formatTime(slice.start),
