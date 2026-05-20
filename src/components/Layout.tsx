@@ -1,13 +1,25 @@
 import { useState } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { useCup } from '../hooks/useCup';
 import { useAuth } from '../hooks/useAuth';
+
+const PAGE_TITLES: Record<string, string> = {
+  '/': 'Forside',
+  '/kamper': 'Kamper',
+  '/tabell': 'Tabell',
+  '/kiosk': 'Kiosk',
+};
 
 export function Layout() {
   const [menuOpen, setMenuOpen] = useState(false);
   const { cup, error: cupError } = useCup();
   const { isAdmin } = useAuth();
+  const { pathname } = useLocation();
+  const base = import.meta.env.BASE_URL;
+
+  const pageTitle =
+    pathname.startsWith('/admin') ? 'Admin' : PAGE_TITLES[pathname] ?? cup.name;
 
   return (
     <div className="app-shell">
@@ -18,24 +30,31 @@ export function Layout() {
         isAdmin={isAdmin}
       />
       <main className={`main-content ${menuOpen ? 'menu-open' : ''}`}>
-        {cupError && (
-          <div className="alert alert-error" style={{ marginBottom: '1rem' }}>
-            {cupError}
-          </div>
-        )}
-        <div className="top-bar">
+        <header className="top-bar">
           <button
             type="button"
             className="menu-btn"
             onClick={() => setMenuOpen(true)}
             aria-label="Åpne meny"
           >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M4 6h16M4 12h16M4 18h16" />
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M4 7h16M4 12h16M4 17h16" strokeLinecap="round" />
             </svg>
           </button>
+          <div className="top-bar-brand">
+            <img src={`${base}tunet-logo.png`} alt="" className="top-bar-logo" />
+            <div className="top-bar-text">
+              <span className="top-bar-cup">{cup.name}</span>
+              <span className="top-bar-page">{pageTitle}</span>
+            </div>
+          </div>
+        </header>
+
+        {cupError && <div className="alert alert-error">{cupError}</div>}
+
+        <div className="page-container">
+          <Outlet context={{ menuOpen, setMenuOpen }} />
         </div>
-        <Outlet context={{ menuOpen, setMenuOpen }} />
       </main>
     </div>
   );

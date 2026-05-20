@@ -7,6 +7,14 @@ interface SidebarProps {
   isAdmin?: boolean;
 }
 
+const NAV = [
+  { to: '/', end: true, label: 'Forside', icon: '⌂' },
+  { to: '/kamper', label: 'Kamper', icon: '⚽' },
+  { to: '/tabell', label: 'Tabell', icon: '📊' },
+  { to: '/kiosk', label: 'Kiosk', icon: '🛒' },
+  { to: '/admin', label: 'Admin', icon: '⚙', adminOnly: false },
+] as const;
+
 export function Sidebar({ open, onClose, cupName, isAdmin }: SidebarProps) {
   const base = import.meta.env.BASE_URL;
 
@@ -22,25 +30,27 @@ export function Sidebar({ open, onClose, cupName, isAdmin }: SidebarProps) {
           <img src={`${base}tunet-logo.png`} alt="Tunet" className="sidebar-logo" />
           <div>
             <div className="sidebar-title">{cupName}</div>
-            <div style={{ fontSize: '0.75rem', opacity: 0.8 }}>Innebandy cup</div>
+            <div className="sidebar-tagline">Innebandy cup</div>
           </div>
         </div>
         <nav className="sidebar-nav">
-          <NavLink to="/" end onClick={onClose}>
-            Forside
-          </NavLink>
-          <NavLink to="/kamper" onClick={onClose}>
-            Kamper
-          </NavLink>
-          <NavLink to="/tabell" onClick={onClose}>
-            Tabell
-          </NavLink>
-          <NavLink to="/kiosk" onClick={onClose}>
-            Kiosk
-          </NavLink>
-          <NavLink to={isAdmin ? '/admin' : '/admin/login'} onClick={onClose}>
-            Admin
-          </NavLink>
+          {NAV.map((item) => {
+            const to = item.to === '/admin' ? (isAdmin ? '/admin' : '/admin/login') : item.to;
+            return (
+              <NavLink
+                key={item.to}
+                to={to}
+                end={'end' in item ? item.end : false}
+                onClick={onClose}
+                className="sidebar-link"
+              >
+                <span className="sidebar-link-icon" aria-hidden>
+                  {item.icon}
+                </span>
+                {item.label}
+              </NavLink>
+            );
+          })}
         </nav>
         <div className="sidebar-footer">Tunet Innebandyklubb</div>
       </aside>

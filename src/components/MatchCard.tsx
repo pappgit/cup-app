@@ -18,32 +18,45 @@ export function MatchCard({
 }: MatchCardProps) {
   const { time, court } = getMatchDisplayParts(match.startTime, match.court);
   const hasScore = match.homeScore != null && match.awayScore != null;
+  const isPlayoff = match.phase === 'crossover' || match.phase === 'quarterfinal';
 
   return (
     <article
       className={`match-card ${highlight ? 'match-card--highlight' : ''} ${
         compact ? 'match-card--compact' : ''
-      }`}
+      } ${isPlayoff ? 'match-card--playoff' : ''}`}
     >
-      <div className="match-card-meta">
-        <span className="match-card-time">{time}</span>
+      <div className="match-card-rail">
+        <time className="match-card-time" dateTime={match.startTime}>
+          {time}
+        </time>
         {court && <span className="match-card-court">{court}</span>}
       </div>
 
-      {match.label && <p className="match-card-label">{match.label}</p>}
+      <div className="match-card-main">
+        {match.label && <span className="match-card-label">{match.label}</span>}
 
-      <div className="match-card-teams">
-        <span className="match-card-team match-card-team--home">{homeName}</span>
-        <span className="match-card-vs" aria-hidden>
-          {hasScore ? (
-            <span className="match-card-score">
-              {match.homeScore}–{match.awayScore}
-            </span>
-          ) : (
-            'vs'
-          )}
-        </span>
-        <span className="match-card-team match-card-team--away">{awayName}</span>
+        <div className="match-card-teams">
+          <div className="match-card-team match-card-team--home">
+            <span className="match-card-team-name">{homeName}</span>
+          </div>
+
+          <div className="match-card-vs" aria-hidden>
+            {hasScore ? (
+              <span className="match-card-score">
+                {match.homeScore}
+                <span className="match-card-score-sep">–</span>
+                {match.awayScore}
+              </span>
+            ) : (
+              <span className="match-card-vs-text">vs</span>
+            )}
+          </div>
+
+          <div className="match-card-team match-card-team--away">
+            <span className="match-card-team-name">{awayName}</span>
+          </div>
+        </div>
       </div>
     </article>
   );

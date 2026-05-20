@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useCup } from '../../hooks/useCup';
 import type { CupDaySchedule, CourtCount, CupDays, ScheduleParams } from '../../types';
 import { AVAILABLE_COURTS, DEFAULT_SCHEDULE_PARAMS } from '../../types';
-import { computeGroupCount } from '../../lib/groups';
+import { computeGroupLayout, describeGroupPlan } from '../../lib/groups';
 import { MatchList } from '../../components/MatchList';
 import {
   getMatchDurationLabel,
@@ -317,15 +317,22 @@ export function AdminSchedule() {
         </div>
 
         {params.seriesPlay && cup.teams.length >= 2 && (
-          <p style={{ fontSize: '0.85rem', color: 'var(--grey-600)', marginTop: '0.5rem' }}>
-            Med {cup.teams.length} lag blir det{' '}
-            <strong>{computeGroupCount(cup.teams.length)}</strong> gruppe(r). Alle møter alle i
-            egen gruppe (3 poeng seier, 1 uavgjort).{' '}
-            {computeGroupCount(cup.teams.length) === 2 &&
-              'Deretter krysskamper: 1. vs 1., 2. vs 2. osv.'}
-            {computeGroupCount(cup.teams.length) === 3 &&
-              'Deretter sluttspill (krysskamper eller kvartfinaler avhengig av gruppestørrelse).'}
-          </p>
+          <div
+            className="alert"
+            style={{
+              marginTop: '0.75rem',
+              background: 'var(--yellow-soft)',
+              color: 'var(--purple-dark)',
+              fontSize: '0.85rem',
+            }}
+          >
+            <strong>Gruppespill ({cup.teams.length} lag):</strong>{' '}
+            {describeGroupPlan(cup.teams.length)}
+            <br />
+            <span style={{ opacity: 0.9 }}>
+              Oppsett: {computeGroupLayout(cup.teams.length).label}
+            </span>
+          </div>
         )}
 
         {!params.seriesPlay && (

@@ -84,7 +84,7 @@ export function HomePage() {
             {cup.matches.length > 8 && (
               <p style={{ marginTop: '1rem', fontSize: '0.9rem', color: 'var(--grey-600)' }}>
                 Viser de 8 neste kampene.{' '}
-                <Link to="/kamper" style={{ color: 'var(--purple)', fontWeight: 600 }}>
+                <Link to="/kamper" className="link-accent">
                   Se hele programmet →
                 </Link>
               </p>

@@ -89,6 +89,30 @@ export function rankInGroup(
   return table[rank - 1]?.teamId ?? null;
 }
 
+/** Topp N tredjeplasser på tvers av grupper (til kvartfinale 4 ved 4+4+4). */
+export function bestThirdPlaces(
+  groups: Group[],
+  matches: Match[],
+  teams: Team[],
+  count: number
+): string[] {
+  const thirds: StandingRow[] = [];
+
+  for (const group of groups) {
+    const table = computeStandings(group, matches, teams);
+    if (table[2]) thirds.push(table[2]);
+  }
+
+  thirds.sort((a, b) => {
+    if (b.points !== a.points) return b.points - a.points;
+    if (b.goalDifference !== a.goalDifference) return b.goalDifference - a.goalDifference;
+    if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor;
+    return a.teamName.localeCompare(b.teamName, 'nb');
+  });
+
+  return thirds.slice(0, count).map((r) => r.teamId);
+}
+
 export function groupLabel(index: number): string {
   return GROUP_LETTERS[index] ?? `G${index + 1}`;
 }
