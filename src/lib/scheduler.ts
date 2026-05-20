@@ -1,4 +1,5 @@
-import type { Match, ScheduleParams, Team } from '../types';
+import type { Group, Match, MatchPhase, ScheduleParams, Team } from '../types';
+import { generateSeriesPairings } from './groups';
 import { normalizeScheduleParams } from './scheduleParams';
 
 function matchDurationMinutes(params: ScheduleParams): number {
@@ -52,16 +53,16 @@ export function countScheduleSlots(params: ScheduleParams): number {
   return buildTimeSlices(p).length * p.courtCount;
 }
 
-type Pairing = { home: string; away: string };
+type Pairing = {
+  home: string;
+  away: string;
+  groupId?: string;
+  phase?: MatchPhase;
+  label?: string;
+};
 
 function pairingKey(a: string, b: string): string {
   return a < b ? `${a}-${b}` : `${b}-${a}`;
-}
-
-/** Maks antall ganger samme to lag kan møtes. */
-function maxMeetingsSameOpponent(teamCount: number, gamesPerTeam: number): number {
-  if (teamCount <= 2) return gamesPerTeam;
-  return Math.max(1, Math.ceil(gamesPerTeam / (teamCount - 1)));
 }
 
 function addPairing(
@@ -78,124 +79,100 @@ function addPairing(
   opponentCount.set(k, (opponentCount.get(k) ?? 0) + 1);
 }
 
-/** Standard round-robin-runder (serie) — roterer lag for varierte motstandere. */
-function addSeriesRoundPairings(
+function countNewOpponents(
+  teamId: string,
+  active: string[],
+  opponentCount: Map<string, number>
+): number {
+  return active.filter(
+    (o) => o !== teamId && (opponentCount.get(pairingKey(teamId, o)) ?? 0) === 0
+  ).length;
+}
+
+/** Størst mulig matching blant lag som ikke har møttes — backtracking (små laggrupper). */
+function maxNewOpponentMatching(
   teamIds: string[],
+  opponentCount: Map<string, number>
+): { home: string; away: string }[] {
+  let best: { home: string; away: string }[] = [];
+
+  const canPair = (a: string, b: string) =>
+    (opponentCount.get(pairingKey(a, b)) ?? 0) === 0;
+
+  function search(used: Set<string>, current: { home: string; away: string }[]) {
+    if (current.length > best.length) {
+      best = [...current];
+    }
+
+    const free = teamIds.filter((id) => !used.has(id));
+    const maxPossible = current.length + Math.floor(free.length / 2);
+    if (maxPossible <= best.length) return;
+
+    if (free.length < 2) return;
+
+    const a = free[0];
+    used.add(a);
+    for (let i = 1; i < free.length; i++) {
+      const b = free[i];
+      if (!canPair(a, b)) continue;
+      used.add(b);
+      current.push({ home: a, away: b });
+      search(used, current);
+      current.pop();
+      used.delete(b);
+    }
+    used.delete(a);
+    search(used, current);
+  }
+
+  search(new Set(), []);
+  return best;
+}
+
+/**
+ * Vennskapsmodus: rundevis maksimal matching uten rematch.
+ * Hvert lag spiller maks én kamp per runde mot en de ikke har møtt.
+ */
+function fillFriendlyPairings(
+  teams: Team[],
   gamesPerTeam: number,
   gamesPlayed: Map<string, number>,
   opponentCount: Map<string, number>,
   pairings: Pairing[]
-): void {
-  let roster = [...teamIds];
+): boolean {
+  const totalNeeded = (teams.length * gamesPerTeam) / 2;
+  const maxRounds = totalNeeded * 2;
 
-  for (let round = 0; round < gamesPerTeam; round++) {
-    const m = roster.length;
-    for (let i = 0; i < Math.floor(m / 2); i++) {
-      const a = roster[i];
-      const b = roster[m - 1 - i];
-      if (a === b) continue;
-      if ((gamesPlayed.get(a) ?? 0) >= gamesPerTeam || (gamesPlayed.get(b) ?? 0) >= gamesPerTeam) {
-        continue;
-      }
+  for (let r = 0; r < maxRounds && pairings.length < totalNeeded; r++) {
+    const active = teams
+      .filter((t) => (gamesPlayed.get(t.id) ?? 0) < gamesPerTeam)
+      .map((t) => t.id);
 
-      const home = round % 2 === 0 ? a : b;
-      const away = home === a ? b : a;
+    if (active.length < 2) return false;
+
+    const sorted = [...active].sort(
+      (a, b) =>
+        countNewOpponents(a, active, opponentCount) -
+        countNewOpponents(b, active, opponentCount)
+    );
+
+    const round = maxNewOpponentMatching(sorted, opponentCount);
+    if (round.length === 0) return false;
+
+    for (const { home, away } of round) {
+      if (pairings.length >= totalNeeded) break;
+      if ((gamesPlayed.get(home) ?? 0) >= gamesPerTeam) continue;
+      if ((gamesPlayed.get(away) ?? 0) >= gamesPerTeam) continue;
+      if ((opponentCount.get(pairingKey(home, away)) ?? 0) > 0) continue;
       addPairing(home, away, gamesPlayed, opponentCount, pairings);
     }
-
-    if (m > 2) {
-      const fixed = roster[0];
-      const tail = roster.slice(1);
-      tail.unshift(tail.pop()!);
-      roster = [fixed, ...tail];
-    }
-  }
-}
-
-function findGreedyPairing(
-  teams: Team[],
-  gamesPerTeam: number,
-  gamesPlayed: Map<string, number>,
-  opponentCount: Map<string, number>,
-  maxSame: number,
-  strictRematch: boolean
-): { home: string; away: string } | null {
-  let best: { home: string; away: string; score: number; need: number } | null = null;
-
-  for (const t1 of teams) {
-    const g1 = gamesPlayed.get(t1.id) ?? 0;
-    if (g1 >= gamesPerTeam) continue;
-
-    for (const t2 of teams) {
-      if (t1.id === t2.id) continue;
-      const g2 = gamesPlayed.get(t2.id) ?? 0;
-      if (g2 >= gamesPerTeam) continue;
-
-      const score = opponentCount.get(pairingKey(t1.id, t2.id)) ?? 0;
-      if (strictRematch && score >= maxSame) continue;
-
-      const need = g1 + g2;
-      if (
-        !best ||
-        score < best.score ||
-        (score === best.score && need > best.need)
-      ) {
-        const home = g1 <= g2 ? t1.id : t2.id;
-        const away = home === t1.id ? t2.id : t1.id;
-        best = { home, away, score, need };
-      }
-    }
   }
 
-  return best ? { home: best.home, away: best.away } : null;
+  return pairings.length === totalNeeded;
 }
 
-/** Fyll opp til alle har gamesPerTeam kamper med begrenset rematch. */
-function fillPairingsGreedy(
-  teams: Team[],
-  gamesPerTeam: number,
-  gamesPlayed: Map<string, number>,
-  opponentCount: Map<string, number>,
-  pairings: Pairing[]
-): void {
-  const n = teams.length;
-  const totalNeeded = (n * gamesPerTeam) / 2;
-  const maxSame = maxMeetingsSameOpponent(n, gamesPerTeam);
-  const maxIter = totalNeeded * n * 4;
-  let iter = 0;
-
-  while (pairings.length < totalNeeded && iter < maxIter) {
-    let pick = findGreedyPairing(
-      teams,
-      gamesPerTeam,
-      gamesPlayed,
-      opponentCount,
-      maxSame,
-      true
-    );
-    if (!pick) {
-      pick = findGreedyPairing(
-        teams,
-        gamesPerTeam,
-        gamesPlayed,
-        opponentCount,
-        maxSame,
-        false
-      );
-    }
-    if (!pick) break;
-
-    addPairing(pick.home, pick.away, gamesPlayed, opponentCount, pairings);
-    iter++;
-  }
-}
-
-/** Generate pairings so each team plays exactly `gamesPerTeam` matches. */
-export function generatePairings(
-  teams: Team[],
-  gamesPerTeam: number,
-  seriesPlay: boolean
-): Pairing[] {
+/** Vennskapsmodus: hver lag får `gamesPerTeam` kamper, maks én gang mot samme motstander. */
+function generateFriendlyPairings(teams: Team[], gamesPerTeam: number): Pairing[] {
   const n = teams.length;
   if (n < 2) return [];
 
@@ -203,8 +180,8 @@ export function generatePairings(
     const [a, b] = teams;
     return Array.from({ length: gamesPerTeam }, (_, i) =>
       i % 2 === 0
-        ? { home: a.id, away: b.id }
-        : { home: b.id, away: a.id }
+        ? { home: a.id, away: b.id, phase: 'friendly' as MatchPhase }
+        : { home: b.id, away: a.id, phase: 'friendly' as MatchPhase }
     );
   }
 
@@ -213,19 +190,51 @@ export function generatePairings(
   const opponentCount = new Map<string, number>();
   teams.forEach((t) => gamesPlayed.set(t.id, 0));
 
+  const ok = fillFriendlyPairings(teams, gamesPerTeam, gamesPlayed, opponentCount, pairings);
+
+  if (!ok) return [];
+
+  return pairings.map((p) => ({ ...p, phase: p.phase ?? 'friendly' }));
+}
+
+/** Kan alle få `gamesPerTeam` kamper mot unike motstandere? */
+export function isFriendlySchedulePossible(teamCount: number, gamesPerTeam: number): boolean {
+  if (teamCount < 2) return false;
+  if ((teamCount * gamesPerTeam) % 2 !== 0) return false;
+  if (teamCount === 2) return true;
+  return gamesPerTeam <= teamCount - 1;
+}
+
+export interface PairingsResult {
+  pairings: Pairing[];
+  groups: Group[];
+}
+
+/** Lag kampoppsett ut fra modus (serie eller vennskaps-cup). */
+export function generatePairings(
+  teams: Team[],
+  gamesPerTeam: number,
+  seriesPlay: boolean
+): Pairing[] {
+  return generatePairingsWithGroups(teams, gamesPerTeam, seriesPlay).pairings;
+}
+
+export function generatePairingsWithGroups(
+  teams: Team[],
+  gamesPerTeam: number,
+  seriesPlay: boolean
+): PairingsResult {
+  if (teams.length < 2) return { pairings: [], groups: [] };
+
   if (seriesPlay) {
-    addSeriesRoundPairings(
-      teams.map((t) => t.id),
-      gamesPerTeam,
-      gamesPlayed,
-      opponentCount,
-      pairings
-    );
+    const { groups, pairings } = generateSeriesPairings(teams);
+    return { pairings, groups };
   }
 
-  fillPairingsGreedy(teams, gamesPerTeam, gamesPlayed, opponentCount, pairings);
-
-  return pairings;
+  return {
+    pairings: generateFriendlyPairings(teams, gamesPerTeam),
+    groups: [],
+  };
 }
 
 export function isGamesPerTeamPossible(teamCount: number, gamesPerTeam: number): boolean {
@@ -323,6 +332,7 @@ export function validateSchedule(teams: Team[], rawParams: ScheduleParams): Sche
   const params = normalizeScheduleParams(rawParams);
   const errors: string[] = [];
   const gamesPerTeam = params.gamesPerTeam;
+  const seriesPlay = params.seriesPlay;
 
   if (teams.length < 2) {
     return {
@@ -339,10 +349,17 @@ export function validateSchedule(teams: Team[], rawParams: ScheduleParams): Sche
     errors.push(`Velg nøyaktig ${params.courtCount} bane(r).`);
   }
 
-  if (!isGamesPerTeamPossible(teams.length, gamesPerTeam)) {
+  if (!seriesPlay && !isGamesPerTeamPossible(teams.length, gamesPerTeam)) {
     errors.push(
       `Med ${teams.length} lag og ${gamesPerTeam} kamper per lag blir totalt antall kamper et oddetall — det går ikke. ` +
         `Velg et partall antall kamper per lag, eller endre antall lag.`
+    );
+  }
+
+  if (!seriesPlay && !isFriendlySchedulePossible(teams.length, gamesPerTeam)) {
+    errors.push(
+      `Med ${teams.length} lag kan hvert lag maks møte ${teams.length - 1} ulike motstandere. ` +
+        `Velg ${teams.length - 1} eller færre kamper per lag.`
     );
   }
 
@@ -356,15 +373,30 @@ export function validateSchedule(teams: Team[], rawParams: ScheduleParams): Sche
     );
   }
 
-  const pairings = generatePairings(teams, gamesPerTeam, params.seriesPlay);
-  const gamesCounts = countGamesPerTeam(pairings, teams);
+  const { pairings } = generatePairingsWithGroups(teams, gamesPerTeam, seriesPlay);
 
-  const shortTeams = teams.filter((t) => (gamesCounts.get(t.id) ?? 0) < gamesPerTeam);
-  if (shortTeams.length > 0) {
-    const g = gamesCounts.get(shortTeams[0].id) ?? 0;
-    errors.push(
-      `Kunne ikke fullføre kampfordeling (${g} av ${gamesPerTeam} kamper for noen lag).`
-    );
+  if (!seriesPlay) {
+    const gamesCounts = countGamesPerTeam(pairings, teams);
+    const shortTeams = teams.filter((t) => (gamesCounts.get(t.id) ?? 0) < gamesPerTeam);
+    if (shortTeams.length > 0) {
+      const g = gamesCounts.get(shortTeams[0].id) ?? 0;
+      errors.push(
+        `Kunne ikke gi alle lag ${gamesPerTeam} kamper mot unike motstandere (noen fikk ${g}). ` +
+          `Prøv færre kamper per lag eller flere lag.`
+      );
+    }
+
+    const seen = new Set<string>();
+    for (const p of pairings) {
+      const key = pairingKey(p.home, p.away);
+      if (seen.has(key)) {
+        errors.push(
+          'Kunne ikke lage kampoppsett uten rematch. Prøv færre kamper per lag eller flere lag.'
+        );
+        break;
+      }
+      seen.add(key);
+    }
   }
 
   if (pairings.length === 0) {
@@ -410,12 +442,42 @@ export function generateSchedule(teams: Team[], rawParams: ScheduleParams): Matc
   return generateScheduleWithMeta(teams, rawParams).matches;
 }
 
+function pairingToMatch(p: Pairing, startTime: string, court: string, round: number): Match {
+  return {
+    id: crypto.randomUUID(),
+    homeTeamId: p.home,
+    awayTeamId: p.away,
+    startTime,
+    court,
+    round,
+    groupId: p.groupId,
+    phase: p.phase,
+    label: p.label,
+    homeScore: null,
+    awayScore: null,
+  };
+}
+
 export function generateScheduleWithMeta(
   teams: Team[],
   rawParams: ScheduleParams
-): ScheduleResult {
+): ScheduleResult & { groups: Group[] } {
   const params = normalizeScheduleParams(rawParams);
-  const pairings = generatePairings(teams, params.gamesPerTeam, params.seriesPlay);
+  const { pairings: rawPairings, groups } = generatePairingsWithGroups(
+    teams,
+    params.gamesPerTeam,
+    params.seriesPlay
+  );
+  const phaseOrder: Record<string, number> = {
+    group: 0,
+    friendly: 0,
+    crossover: 1,
+    quarterfinal: 2,
+  };
+  const pairings = [...rawPairings].sort(
+    (a, b) =>
+      (phaseOrder[a.phase ?? 'friendly'] ?? 0) - (phaseOrder[b.phase ?? 'friendly'] ?? 0)
+  );
   const slices = buildTimeSlices(params);
   const courts = params.courts.slice(0, params.courtCount);
 
@@ -425,6 +487,7 @@ export function generateScheduleWithMeta(
       unscheduled: pairings.length,
       pairingsCount: pairings.length,
       backToBackTeams: 0,
+      groups,
     };
   }
 
@@ -439,14 +502,14 @@ export function generateScheduleWithMeta(
     let sliceIndex = 0;
     for (const p of remaining) {
       while (sliceIndex < slices.length && matches.length < pairings.length) {
-        matches.push({
-          id: crypto.randomUUID(),
-          homeTeamId: p.home,
-          awayTeamId: p.away,
-          startTime: formatTime(slices[sliceIndex].start),
-          court: courts[matches.length % courts.length],
-          round: matches.length + 1,
-        });
+        matches.push(
+          pairingToMatch(
+            p,
+            formatTime(slices[sliceIndex].start),
+            courts[matches.length % courts.length],
+            matches.length + 1
+          )
+        );
         sliceIndex += 2;
         break;
       }
@@ -456,6 +519,7 @@ export function generateScheduleWithMeta(
       unscheduled: Math.max(0, pairings.length - matches.length),
       pairingsCount: pairings.length,
       backToBackTeams: detectBackToBack(matches, params).length,
+      groups,
     };
   }
 
@@ -484,14 +548,14 @@ export function generateScheduleWithMeta(
       gamesScheduled.set(p.home, (gamesScheduled.get(p.home) ?? 0) + 1);
       gamesScheduled.set(p.away, (gamesScheduled.get(p.away) ?? 0) + 1);
 
-      matches.push({
-        id: crypto.randomUUID(),
-        homeTeamId: p.home,
-        awayTeamId: p.away,
-        startTime: formatTime(slice.start),
-        court,
-        round: Math.floor(matches.length / Math.max(1, Math.floor(teams.length / 2))) + 1,
-      });
+      matches.push(
+        pairingToMatch(
+          p,
+          formatTime(slice.start),
+          court,
+          Math.floor(matches.length / Math.max(1, Math.floor(teams.length / 2))) + 1
+        )
+      );
     }
   }
 
@@ -502,6 +566,7 @@ export function generateScheduleWithMeta(
     unscheduled: remaining.length,
     pairingsCount: pairings.length,
     backToBackTeams: backToBack.length,
+    groups,
   };
 }
 

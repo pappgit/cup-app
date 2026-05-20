@@ -72,6 +72,7 @@ export function normalizeScheduleParams(
     matchBreak: params.matchBreak ?? DEFAULT_SCHEDULE_PARAMS.matchBreak,
     gamesPerTeam: params.gamesPerTeam ?? DEFAULT_SCHEDULE_PARAMS.gamesPerTeam,
     seriesPlay: params.seriesPlay ?? DEFAULT_SCHEDULE_PARAMS.seriesPlay,
+    groups: params.groups,
     cupDays,
     days: trimmedDays,
     courtCount,

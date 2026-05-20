@@ -1,7 +1,8 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { MatchList } from '../components/MatchList';
 import { useCup } from '../hooks/useCup';
 import { getFavoriteTeamId, setFavoriteTeamId } from '../lib/storage';
-import { formatMatchTime } from '../lib/scheduler';
 import { SponsorStrip } from '../components/SponsorStrip';
 
 export function HomePage() {
@@ -11,7 +12,9 @@ export function HomePage() {
   const teamName = (id: string) => cup.teams.find((t) => t.id === id)?.name ?? 'Ukjent lag';
 
   const favoriteMatches = favoriteId
-    ? cup.matches.filter((m) => m.homeTeamId === favoriteId || m.awayTeamId === favoriteId)
+    ? cup.matches
+        .filter((m) => m.homeTeamId === favoriteId || m.awayTeamId === favoriteId)
+        .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
     : [];
 
   const upcoming = [...cup.matches]
@@ -31,7 +34,7 @@ export function HomePage() {
       </section>
 
       {cup.teams.length > 0 && (
-        <div className="card card-accent" style={{ marginBottom: '1.5rem' }}>
+        <div className="card card-accent" style={{ marginBottom: '1.25rem' }}>
           <h2>Ditt favorittlag</h2>
           <div className="form-group" style={{ marginBottom: 0 }}>
             <select
@@ -47,46 +50,46 @@ export function HomePage() {
             </select>
           </div>
           {favoriteId && favoriteMatches.length > 0 && (
-            <ul className="match-list" style={{ marginTop: '1rem' }}>
-              {favoriteMatches.map((m) => (
-                <li key={m.id} className="match-item match-favorite">
-                  <span className="match-time">{formatMatchTime(m.startTime, m.court)}</span>
-                  <span className="match-teams">
-                    {teamName(m.homeTeamId)}
-                    <span className="vs">vs</span>
-                    {teamName(m.awayTeamId)}
-                  </span>
-                </li>
-              ))}
-            </ul>
+            <div style={{ marginTop: '1rem' }}>
+              <MatchList
+                matches={favoriteMatches}
+                teamName={teamName}
+                favoriteTeamId={favoriteId}
+                showDayHeaders={favoriteMatches.length > 3}
+              />
+            </div>
           )}
         </div>
       )}
 
       <div className="card">
-        <h2>Kamprogram</h2>
+        <h2>
+          Kamprogram
+          {cup.matches.length > 0 && (
+            <span className="match-count-badge">{cup.matches.length}</span>
+          )}
+        </h2>
         {cup.matches.length === 0 ? (
           <p className="empty-state" style={{ padding: '1rem 0' }}>
             Kamprogrammet er ikke klart ennå. Kom tilbake snart!
           </p>
         ) : (
-          <ul className="match-list">
-            {upcoming.map((m) => (
-              <li key={m.id} className="match-item">
-                <span className="match-time">{formatMatchTime(m.startTime, m.court)}</span>
-                <span className="match-teams">
-                  {teamName(m.homeTeamId)}
-                  <span className="vs">vs</span>
-                  {teamName(m.awayTeamId)}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-        {cup.matches.length > 8 && (
-          <p style={{ marginTop: '0.75rem', fontSize: '0.85rem', color: 'var(--grey-600)' }}>
-            Viser de 8 neste kampene. Se alle under Kamper.
-          </p>
+          <>
+            <MatchList
+              matches={upcoming}
+              teamName={teamName}
+              favoriteTeamId={favoriteId}
+              showDayHeaders
+            />
+            {cup.matches.length > 8 && (
+              <p style={{ marginTop: '1rem', fontSize: '0.9rem', color: 'var(--grey-600)' }}>
+                Viser de 8 neste kampene.{' '}
+                <Link to="/kamper" style={{ color: 'var(--purple)', fontWeight: 600 }}>
+                  Se hele programmet →
+                </Link>
+              </p>
+            )}
+          </>
         )}
       </div>
 

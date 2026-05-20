@@ -32,6 +32,9 @@ export function Sidebar({ open, onClose, cupName, isAdmin }: SidebarProps) {
           <NavLink to="/kamper" onClick={onClose}>
             Kamper
           </NavLink>
+          <NavLink to="/tabell" onClick={onClose}>
+            Tabell
+          </NavLink>
           <NavLink to="/kiosk" onClick={onClose}>
             Kiosk
           </NavLink>

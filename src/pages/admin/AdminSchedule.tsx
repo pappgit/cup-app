@@ -2,8 +2,9 @@ import { useMemo, useState } from 'react';
 import { useCup } from '../../hooks/useCup';
 import type { CupDaySchedule, CourtCount, CupDays, ScheduleParams } from '../../types';
 import { AVAILABLE_COURTS, DEFAULT_SCHEDULE_PARAMS } from '../../types';
+import { computeGroupCount } from '../../lib/groups';
+import { MatchList } from '../../components/MatchList';
 import {
-  formatMatchTime,
   getMatchDurationLabel,
   countScheduleSlots,
   slotDurationMinutes,
@@ -104,7 +105,13 @@ export function AdminSchedule() {
       return;
     }
 
-    await update({ matches: result.matches, scheduleParams: normalized });
+    await update({
+      matches: result.matches,
+      scheduleParams: {
+        ...normalized,
+        groups: result.groups.length > 0 ? result.groups : undefined,
+      },
+    });
     setMsg(`Generert ${result.matches.length} kamper!`);
     setTimeout(() => setMsg(''), 5000);
   };
@@ -277,33 +284,56 @@ export function AdminSchedule() {
               <option value={15}>15 min</option>
             </select>
           </div>
-          <div className="form-group">
-            <label>Alle skal spille</label>
-            <select
-              value={params.gamesPerTeam}
-              onChange={(e) =>
-                setParams({ gamesPerTeam: Number(e.target.value) as ScheduleParams['gamesPerTeam'] })
-              }
-            >
-              <option value={2}>2 kamper</option>
-              <option value={3}>3 kamper</option>
-              <option value={4}>4 kamper</option>
-              <option value={5}>5 kamper</option>
-              <option value={6}>6 kamper</option>
-              <option value={7}>7 kamper</option>
-            </select>
-          </div>
+          {!params.seriesPlay && (
+            <div className="form-group">
+              <label>Alle skal spille (unike motstandere)</label>
+              <select
+                value={params.gamesPerTeam}
+                onChange={(e) =>
+                  setParams({
+                    gamesPerTeam: Number(e.target.value) as ScheduleParams['gamesPerTeam'],
+                  })
+                }
+              >
+                <option value={2}>2 kamper</option>
+                <option value={3}>3 kamper</option>
+                <option value={4}>4 kamper</option>
+                <option value={5}>5 kamper</option>
+                <option value={6}>6 kamper</option>
+                <option value={7}>7 kamper</option>
+              </select>
+            </div>
+          )}
           <div className="form-group">
             <label>Seriekamper</label>
             <select
               value={params.seriesPlay ? 'ja' : 'nei'}
               onChange={(e) => setParams({ seriesPlay: e.target.value === 'ja' })}
             >
-              <option value="nei">Nei</option>
-              <option value="ja">Ja</option>
+              <option value="nei">Nei — flest unike motstandere, ingen rematch</option>
+              <option value="ja">Ja — grupper, tabell og sluttspill</option>
             </select>
           </div>
         </div>
+
+        {params.seriesPlay && cup.teams.length >= 2 && (
+          <p style={{ fontSize: '0.85rem', color: 'var(--grey-600)', marginTop: '0.5rem' }}>
+            Med {cup.teams.length} lag blir det{' '}
+            <strong>{computeGroupCount(cup.teams.length)}</strong> gruppe(r). Alle møter alle i
+            egen gruppe (3 poeng seier, 1 uavgjort).{' '}
+            {computeGroupCount(cup.teams.length) === 2 &&
+              'Deretter krysskamper: 1. vs 1., 2. vs 2. osv.'}
+            {computeGroupCount(cup.teams.length) === 3 &&
+              'Deretter sluttspill (krysskamper eller kvartfinaler avhengig av gruppestørrelse).'}
+          </p>
+        )}
+
+        {!params.seriesPlay && (
+          <p style={{ fontSize: '0.85rem', color: 'var(--grey-600)', marginTop: '0.5rem' }}>
+            Uten seriespill: hvert lag spiller valgt antall kamper mot{' '}
+            <strong>forskjellige</strong> motstandere (samme lag møtes ikke to ganger).
+          </p>
+        )}
 
         <p style={{ fontSize: '0.85rem', color: 'var(--grey-600)' }}>
           {getMatchDurationLabel(params.matchFormat)} + {params.periodBreak} min pause mellom
@@ -326,19 +356,17 @@ export function AdminSchedule() {
 
       {cup.matches.length > 0 && (
         <div className="card">
-          <h2>Kamprogram ({cup.matches.length} kamper)</h2>
-          <ul className="match-list">
-            {cup.matches.map((m) => (
-              <li key={m.id} className="match-item">
-                <span className="match-time">{formatMatchTime(m.startTime, m.court)}</span>
-                <span className="match-teams">
-                  {teamName(m.homeTeamId)}
-                  <span className="vs">vs</span>
-                  {teamName(m.awayTeamId)}
-                </span>
-              </li>
-            ))}
-          </ul>
+          <h2>
+            Kamprogram
+            <span className="match-count-badge">{cup.matches.length}</span>
+          </h2>
+          <MatchList
+            matches={[...cup.matches].sort(
+              (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+            )}
+            teamName={teamName}
+            showDayHeaders
+          />
         </div>
       )}
     </>

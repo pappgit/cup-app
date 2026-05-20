@@ -26,6 +26,7 @@ export function AdminLayout() {
         </NavLink>
         <NavLink to="/admin/lag">Lag</NavLink>
         <NavLink to="/admin/kamper">Kamprogram</NavLink>
+        <NavLink to="/admin/resultater">Resultater</NavLink>
         <NavLink to="/admin/kiosk">Kiosk</NavLink>
         <NavLink to="/admin/sponsorer">Sponsorer</NavLink>
         <NavLink to="/admin/innstillinger">Innstillinger</NavLink>

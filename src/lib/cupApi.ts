@@ -25,12 +25,34 @@ async function persistMatches(
     start_time: m.startTime,
     court: m.court ?? null,
     round: m.round ?? null,
+    group_id: m.groupId ?? null,
+    phase: m.phase ?? null,
+    home_score: m.homeScore ?? null,
+    away_score: m.awayScore ?? null,
+    match_label: m.label ?? null,
   }));
 
   let { error } = await client.from('matches').insert(rows);
+  if (error?.message?.includes('court') || error?.message?.includes('group_id')) {
+    const basic = rows.map(
+      ({ group_id: _g, phase: _p, home_score: _hs, away_score: _as, match_label: _l, ...rest }) =>
+        rest
+    );
+    ({ error } = await client.from('matches').insert(basic));
+  }
   if (error?.message?.includes('court')) {
-    const withoutCourt = rows.map(({ court: _c, ...rest }) => rest);
-    ({ error } = await client.from('matches').insert(withoutCourt));
+    const legacy = rows.map(
+      ({
+        court: _c,
+        group_id: _g,
+        phase: _p,
+        home_score: _hs,
+        away_score: _as,
+        match_label: _l,
+        ...rest
+      }) => rest
+    );
+    ({ error } = await client.from('matches').insert(legacy));
   }
   if (error) throw error;
 }
@@ -71,16 +93,28 @@ export async function fetchCup(): Promise<CupData & { cupId: string }> {
     client.from('sponsors').select('id, name, logo_url, sort_order').eq('cup_id', cupId).order('sort_order'),
   ]);
 
+  const matchSelectFull =
+    'id, home_team_id, away_team_id, start_time, round, court, group_id, phase, home_score, away_score, match_label';
+  const matchSelectBasic = 'id, home_team_id, away_team_id, start_time, round, court';
+  const matchSelectLegacy = 'id, home_team_id, away_team_id, start_time, round';
+
   let matchesRes = await client
     .from('matches')
-    .select('id, home_team_id, away_team_id, start_time, round, court')
+    .select(matchSelectFull)
     .eq('cup_id', cupId)
     .order('start_time');
 
+  if (matchesRes.error) {
+    matchesRes = await client
+      .from('matches')
+      .select(matchSelectBasic)
+      .eq('cup_id', cupId)
+      .order('start_time');
+  }
   if (matchesRes.error?.message?.includes('court')) {
     matchesRes = await client
       .from('matches')
-      .select('id, home_team_id, away_team_id, start_time, round')
+      .select(matchSelectLegacy)
       .eq('cup_id', cupId)
       .order('start_time');
   }
@@ -103,6 +137,11 @@ export async function fetchCup(): Promise<CupData & { cupId: string }> {
       startTime: m.start_time,
       court: m.court ?? undefined,
       round: m.round ?? undefined,
+      groupId: m.group_id ?? undefined,
+      phase: m.phase ?? undefined,
+      homeScore: m.home_score ?? null,
+      awayScore: m.away_score ?? null,
+      label: m.match_label ?? undefined,
     })),
     shopItems: (shopRes.data ?? []).map((s) => ({
       id: s.id,

@@ -1,7 +1,7 @@
 import { useState } from 'react';
+import { MatchList } from '../components/MatchList';
 import { useCup } from '../hooks/useCup';
 import { getFavoriteTeamId } from '../lib/storage';
-import { formatMatchTime } from '../lib/scheduler';
 
 export function MatchesPage() {
   const { cup } = useCup();
@@ -22,11 +22,19 @@ export function MatchesPage() {
 
   return (
     <>
-      <h1 className="page-title">Kamper</h1>
+      <header className="page-header">
+        <h1 className="page-title">Kamper</h1>
+        {matches.length > 0 && (
+          <p className="page-subtitle">
+            {matches.length} kamp{matches.length !== 1 ? 'er' : ''}
+            {filterTeam ? ` · ${teamName(filterTeam)}` : ''}
+          </p>
+        )}
+      </header>
 
       {cup.teams.length > 0 && (
-        <div className="card" style={{ marginBottom: '1.5rem' }}>
-          <div className="form-group" style={{ marginBottom: 0 }}>
+        <div className="card filter-bar">
+          <div className="form-group">
             <label>Filtrer på lag</label>
             <select value={filterTeam} onChange={(e) => setFilterTeam(e.target.value)}>
               <option value="">Alle lag</option>
@@ -41,30 +49,11 @@ export function MatchesPage() {
       )}
 
       <div className="card">
-        {matches.length === 0 ? (
-          <p className="empty-state">Ingen kamper å vise ennå.</p>
-        ) : (
-          <ul className="match-list">
-            {matches.map((m) => {
-              const isFavorite =
-                favoriteId &&
-                (m.homeTeamId === favoriteId || m.awayTeamId === favoriteId);
-              return (
-                <li
-                  key={m.id}
-                  className={`match-item ${isFavorite ? 'match-favorite' : ''}`}
-                >
-                  <span className="match-time">{formatMatchTime(m.startTime, m.court)}</span>
-                  <span className="match-teams">
-                    {teamName(m.homeTeamId)}
-                    <span className="vs">vs</span>
-                    {teamName(m.awayTeamId)}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        )}
+        <MatchList
+          matches={matches}
+          teamName={teamName}
+          favoriteTeamId={favoriteId}
+        />
       </div>
     </>
   );
