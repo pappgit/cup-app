@@ -145,7 +145,9 @@ export function assignTeamsToGroups(teams: Team[], layout: GroupLayout): Group[]
       pos = (pos + 1) % groupCount;
       attempts++;
     }
-    groups[pos].teamIds.push(ids[i]);
+    if (groups[pos].teamIds.length < sizes[pos]) {
+      groups[pos].teamIds.push(ids[i]);
+    }
   }
 
   return groups;

@@ -1,5 +1,43 @@
-import type { CupDaySchedule, CourtCount, CupDays, ScheduleParams } from '../types';
+import type { CupDaySchedule, CourtCount, CupDays, GamesPerTeam, ScheduleParams } from '../types';
 import { AVAILABLE_COURTS, DEFAULT_SCHEDULE_PARAMS } from '../types';
+
+function asCourtCount(value: unknown): CourtCount {
+  const n = Number(value);
+  if (n >= 3) return 3;
+  if (n >= 2) return 2;
+  return 1;
+}
+
+function asCupDays(value: unknown): CupDays {
+  const n = Number(value);
+  if (n >= 3) return 3;
+  if (n >= 2) return 2;
+  return 1;
+}
+
+function asGamesPerTeam(value: unknown): GamesPerTeam {
+  const n = Number(value);
+  if (n >= 7) return 7;
+  if (n >= 6) return 6;
+  if (n >= 5) return 5;
+  if (n >= 4) return 4;
+  if (n >= 3) return 3;
+  return 2;
+}
+
+function parseParamsInput(
+  params: ScheduleParams | null | undefined
+): ScheduleParams | null | undefined {
+  if (!params) return null;
+  if (typeof params === 'string') {
+    try {
+      return JSON.parse(params) as ScheduleParams;
+    } catch {
+      return null;
+    }
+  }
+  return params;
+}
 
 export function addDays(dateStr: string, days: number): string {
   const d = new Date(dateStr + 'T12:00:00');
@@ -30,18 +68,19 @@ export function buildDays(
 export function normalizeScheduleParams(
   params: ScheduleParams | null | undefined
 ): ScheduleParams {
-  if (!params) return { ...DEFAULT_SCHEDULE_PARAMS };
+  const parsed = parseParamsInput(params);
+  if (!parsed) return { ...DEFAULT_SCHEDULE_PARAMS };
 
-  const legacy = params as ScheduleParams & {
+  const legacy = parsed as ScheduleParams & {
     startDate?: string;
     timeFrom?: string;
     timeTo?: string;
   };
 
-  let days = params.days;
+  let days = parsed.days;
   if (!days?.length) {
     const start = legacy.startDate ?? DEFAULT_SCHEDULE_PARAMS.days[0].date;
-    const cupDays = params.cupDays ?? 1;
+    const cupDays = asCupDays(parsed.cupDays ?? 1);
     days = Array.from({ length: cupDays }, (_, i) => ({
       date: addDays(start, i),
       timeFrom: legacy.timeFrom ?? '09:00',
@@ -49,7 +88,7 @@ export function normalizeScheduleParams(
     }));
   }
 
-  const cupDays = (params.cupDays ?? days.length) as CupDays;
+  const cupDays = asCupDays(parsed.cupDays ?? days.length);
   const trimmedDays = days.slice(0, cupDays);
   while (trimmedDays.length < cupDays) {
     const last = trimmedDays[trimmedDays.length - 1] ?? days[0];
@@ -60,19 +99,21 @@ export function normalizeScheduleParams(
     });
   }
 
-  const courtCount = params.courtCount ?? 1;
-  let courts = params.courts?.length ? params.courts : defaultCourts(courtCount);
+  const courtCount = asCourtCount(parsed.courtCount);
+  let courts = parsed.courts?.length ? parsed.courts : defaultCourts(courtCount);
   if (courts.length !== courtCount) {
     courts = defaultCourts(courtCount);
   }
 
   return {
-    matchFormat: params.matchFormat ?? DEFAULT_SCHEDULE_PARAMS.matchFormat,
-    periodBreak: params.periodBreak ?? DEFAULT_SCHEDULE_PARAMS.periodBreak,
-    matchBreak: params.matchBreak ?? DEFAULT_SCHEDULE_PARAMS.matchBreak,
-    gamesPerTeam: params.gamesPerTeam ?? DEFAULT_SCHEDULE_PARAMS.gamesPerTeam,
-    seriesPlay: params.seriesPlay ?? DEFAULT_SCHEDULE_PARAMS.seriesPlay,
-    groups: params.groups,
+    matchFormat: parsed.matchFormat ?? DEFAULT_SCHEDULE_PARAMS.matchFormat,
+    periodBreak: Number(parsed.periodBreak) === 10 ? 10 : 5,
+    matchBreak: ([5, 10, 15] as const).includes(Number(parsed.matchBreak) as 5 | 10 | 15)
+      ? (Number(parsed.matchBreak) as 5 | 10 | 15)
+      : DEFAULT_SCHEDULE_PARAMS.matchBreak,
+    gamesPerTeam: asGamesPerTeam(parsed.gamesPerTeam),
+    seriesPlay: Boolean(parsed.seriesPlay),
+    groups: parsed.groups,
     cupDays,
     days: trimmedDays,
     courtCount,

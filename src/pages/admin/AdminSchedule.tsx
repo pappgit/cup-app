@@ -65,10 +65,23 @@ export function AdminSchedule() {
   };
 
   const slots = countScheduleSlots(params);
-  const validation = useMemo(
-    () => validateSchedule(cup.teams, params),
-    [cup.teams, params]
-  );
+  const validation = useMemo(() => {
+    try {
+      return validateSchedule(cup.teams, params);
+    } catch (err) {
+      console.error('validateSchedule failed', err);
+      return {
+        ok: false,
+        errors: [
+          'Kunne ikke sjekke kamprogrammet. Prøv å laste siden på nytt, eller sjekk lag og innstillinger.',
+        ],
+        pairingsCount: 0,
+        timeSlicesCount: 0,
+        slotsCount: 0,
+        gamesPerTeam: params.gamesPerTeam,
+      };
+    }
+  }, [cup.teams, params]);
   const slicesNeeded = useMemo(
     () => minTimeSlicesNeeded(cup.teams.length, validation.pairingsCount),
     [cup.teams.length, validation.pairingsCount]
@@ -368,9 +381,12 @@ export function AdminSchedule() {
             <span className="match-count-badge">{cup.matches.length}</span>
           </h2>
           <MatchList
-            matches={[...cup.matches].sort(
-              (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
-            )}
+            matches={[...cup.matches]
+              .filter((m) => m.startTime)
+              .sort(
+                (a, b) =>
+                  new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+              )}
             teamName={teamName}
             showDayHeaders
           />

@@ -373,7 +373,12 @@ export function validateSchedule(teams: Team[], rawParams: ScheduleParams): Sche
     );
   }
 
-  const { pairings } = generatePairingsWithGroups(teams, gamesPerTeam, seriesPlay);
+  let pairings: Pairing[] = [];
+  try {
+    pairings = generatePairingsWithGroups(teams, gamesPerTeam, seriesPlay).pairings;
+  } catch {
+    errors.push('Kunne ikke lage kampoppsett. Sjekk antall lag og innstillinger.');
+  }
 
   if (!seriesPlay) {
     const gamesCounts = countGamesPerTeam(pairings, teams);
@@ -413,14 +418,6 @@ export function validateSchedule(teams: Team[], rawParams: ScheduleParams): Sche
     );
   }
 
-  const preview = generateScheduleWithMeta(teams, params);
-  if (preview.unscheduled > 0 && errors.length === 0) {
-    errors.push(
-      `${preview.unscheduled} kamper får ikke plass med pause-regelen (ingen spiller to kamper på rad). ` +
-        `Legg til mer tid eller flere baner.`
-    );
-  }
-
   return {
     ok: errors.length === 0,
     errors,
@@ -442,9 +439,16 @@ export function generateSchedule(teams: Team[], rawParams: ScheduleParams): Matc
   return generateScheduleWithMeta(teams, rawParams).matches;
 }
 
+function safeMatchId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `m-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
 function pairingToMatch(p: Pairing, startTime: string, court: string, round: number): Match {
   return {
-    id: crypto.randomUUID(),
+    id: safeMatchId(),
     homeTeamId: p.home,
     awayTeamId: p.away,
     startTime,

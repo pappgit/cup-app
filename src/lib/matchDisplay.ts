@@ -7,6 +7,14 @@ export interface MatchDisplayParts {
 
 export function getMatchDisplayParts(iso: string, court?: string): MatchDisplayParts {
   const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) {
+    return {
+      dateKey: 'ukjent',
+      dateLabel: 'Ukjent dato',
+      time: '–',
+      court: court ?? null,
+    };
+  }
   const y = d.getFullYear();
   const mo = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
