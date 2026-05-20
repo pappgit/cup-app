@@ -1,27 +1,94 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useCup } from '../../hooks/useCup';
-import type { ScheduleParams } from '../../types';
-import { DEFAULT_SCHEDULE_PARAMS } from '../../types';
-import { generateSchedule, formatMatchTime, getMatchDurationLabel } from '../../lib/scheduler';
+import type { CupDaySchedule, CourtCount, CupDays, ScheduleParams } from '../../types';
+import { AVAILABLE_COURTS, DEFAULT_SCHEDULE_PARAMS } from '../../types';
+import {
+  generateSchedule,
+  formatMatchTime,
+  getMatchDurationLabel,
+  countScheduleSlots,
+  slotDurationMinutes,
+} from '../../lib/scheduler';
+import {
+  normalizeScheduleParams,
+  buildDays,
+  defaultCourts,
+  addDays,
+} from '../../lib/scheduleParams';
 
 export function AdminSchedule() {
   const { cup, update } = useCup();
-  const params: ScheduleParams = cup.scheduleParams ?? DEFAULT_SCHEDULE_PARAMS;
+  const params = useMemo(
+    () => normalizeScheduleParams(cup.scheduleParams ?? DEFAULT_SCHEDULE_PARAMS),
+    [cup.scheduleParams]
+  );
   const [msg, setMsg] = useState('');
 
   const setParams = (patch: Partial<ScheduleParams>) => {
-    update({ scheduleParams: { ...params, ...patch } });
+    update({ scheduleParams: normalizeScheduleParams({ ...params, ...patch }) });
   };
+
+  const setCupDays = (cupDays: CupDays) => {
+    setParams({
+      cupDays,
+      days: buildDays(cupDays, params.days[0]),
+    });
+  };
+
+  const setCourtCount = (courtCount: CourtCount) => {
+    setParams({
+      courtCount,
+      courts: defaultCourts(courtCount),
+    });
+  };
+
+  const toggleCourt = (name: string) => {
+    const selected = params.courts.includes(name)
+      ? params.courts.filter((c) => c !== name)
+      : [...params.courts, name];
+    if (selected.length > params.courtCount) return;
+    if (selected.length === 0) return;
+    setParams({ courts: selected });
+  };
+
+  const updateDay = (index: number, patch: Partial<CupDaySchedule>) => {
+    const days = params.days.map((d, i) => (i === index ? { ...d, ...patch } : d));
+    if (index === 0 && patch.date && params.cupDays > 1) {
+      for (let i = 1; i < days.length; i++) {
+        days[i] = { ...days[i], date: addDays(patch.date!, i) };
+      }
+    }
+    setParams({ days });
+  };
+
+  const slots = countScheduleSlots(params);
 
   const generate = async () => {
     if (cup.teams.length < 2) {
       setMsg('Legg inn minst 2 lag først');
       return;
     }
-    const matches = generateSchedule(cup.teams, params);
-    await update({ matches, scheduleParams: params });
-    setMsg(`Generert ${matches.length} kamper!`);
-    setTimeout(() => setMsg(''), 3000);
+    if (params.courts.length !== params.courtCount) {
+      setMsg(`Velg nøyaktig ${params.courtCount} bane(r)`);
+      return;
+    }
+
+    const normalized = normalizeScheduleParams(params);
+    const matches = generateSchedule(cup.teams, normalized);
+    const needed = Math.ceil(
+      (cup.teams.length * normalized.gamesPerTeam) / 2
+    );
+
+    if (matches.length < needed) {
+      setMsg(
+        `Generert ${matches.length} av ca. ${needed} kamper. Legg til flere dager/tider eller flere baner (${slots} tidspunkter tilgjengelig).`
+      );
+    } else {
+      setMsg(`Generert ${matches.length} kamper!`);
+    }
+
+    await update({ matches, scheduleParams: normalized });
+    setTimeout(() => setMsg(''), 5000);
   };
 
   const clearMatches = async () => {
@@ -35,19 +102,115 @@ export function AdminSchedule() {
   return (
     <>
       {msg && (
-        <div className={`alert ${msg.includes('Generert') ? 'alert-success' : 'alert-error'}`}>
+        <div
+          className={`alert ${
+            msg.includes('Generert') && !msg.includes(' av ca.') ? 'alert-success' : 'alert-error'
+          }`}
+        >
           {msg}
         </div>
       )}
 
       <div className="card" style={{ marginBottom: '1.5rem' }}>
         <h2>Parametere for kamprogram</h2>
+
         <div className="form-row cols-2">
+          <div className="form-group">
+            <label>Antall cup-dager</label>
+            <select
+              value={params.cupDays}
+              onChange={(e) => setCupDays(Number(e.target.value) as CupDays)}
+            >
+              <option value={1}>1 dag</option>
+              <option value={2}>2 dager</option>
+              <option value={3}>3 dager</option>
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Antall baner</label>
+            <select
+              value={params.courtCount}
+              onChange={(e) => setCourtCount(Number(e.target.value) as CourtCount)}
+            >
+              <option value={1}>1 bane</option>
+              <option value={2}>2 baner</option>
+              <option value={3}>3 baner</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="form-group">
+          <label>Velg baner ({params.courts.length}/{params.courtCount})</label>
+          <div className="team-chip-list">
+            {AVAILABLE_COURTS.map((court) => {
+              const on = params.courts.includes(court);
+              return (
+                <button
+                  key={court}
+                  type="button"
+                  className="team-chip"
+                  style={{
+                    cursor: 'pointer',
+                    border: on ? '2px solid var(--purple)' : undefined,
+                    opacity: on ? 1 : 0.55,
+                  }}
+                  onClick={() => toggleCourt(court)}
+                >
+                  {court}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <h3 style={{ color: 'var(--purple)', fontSize: '1rem', margin: '1.25rem 0 0.75rem' }}>
+          Dager og halltider
+        </h3>
+        {params.days.map((day, i) => (
+          <div
+            key={i}
+            className="form-row cols-2"
+            style={{
+              marginBottom: '1rem',
+              paddingBottom: '1rem',
+              borderBottom: i < params.days.length - 1 ? '1px solid var(--grey-200)' : undefined,
+            }}
+          >
+            <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+              <label>Dag {i + 1} — dato</label>
+              <input
+                type="date"
+                value={day.date}
+                onChange={(e) => updateDay(i, { date: e.target.value })}
+              />
+            </div>
+            <div className="form-group">
+              <label>Tid fra</label>
+              <input
+                type="time"
+                value={day.timeFrom}
+                onChange={(e) => updateDay(i, { timeFrom: e.target.value })}
+              />
+            </div>
+            <div className="form-group">
+              <label>Tid til</label>
+              <input
+                type="time"
+                value={day.timeTo}
+                onChange={(e) => updateDay(i, { timeTo: e.target.value })}
+              />
+            </div>
+          </div>
+        ))}
+
+        <div className="form-row cols-2" style={{ marginTop: '0.5rem' }}>
           <div className="form-group">
             <label>Kamplengde</label>
             <select
               value={params.matchFormat}
-              onChange={(e) => setParams({ matchFormat: e.target.value as ScheduleParams['matchFormat'] })}
+              onChange={(e) =>
+                setParams({ matchFormat: e.target.value as ScheduleParams['matchFormat'] })
+              }
             >
               <option value="2x15">2 × 15 min</option>
               <option value="2x20">2 × 20 min</option>
@@ -69,7 +232,9 @@ export function AdminSchedule() {
             <label>Pause mellom kampene</label>
             <select
               value={params.matchBreak}
-              onChange={(e) => setParams({ matchBreak: Number(e.target.value) as ScheduleParams['matchBreak'] })}
+              onChange={(e) =>
+                setParams({ matchBreak: Number(e.target.value) as ScheduleParams['matchBreak'] })
+              }
             >
               <option value={5}>5 min</option>
               <option value={10}>10 min</option>
@@ -80,7 +245,9 @@ export function AdminSchedule() {
             <label>Alle skal spille</label>
             <select
               value={params.gamesPerTeam}
-              onChange={(e) => setParams({ gamesPerTeam: Number(e.target.value) as ScheduleParams['gamesPerTeam'] })}
+              onChange={(e) =>
+                setParams({ gamesPerTeam: Number(e.target.value) as ScheduleParams['gamesPerTeam'] })
+              }
             >
               <option value={5}>5 kamper</option>
               <option value={6}>6 kamper</option>
@@ -97,36 +264,16 @@ export function AdminSchedule() {
               <option value="ja">Ja</option>
             </select>
           </div>
-          <div className="form-group">
-            <label>Startdato (hallen)</label>
-            <input
-              type="date"
-              value={params.startDate}
-              onChange={(e) => setParams({ startDate: e.target.value })}
-            />
-          </div>
-          <div className="form-group">
-            <label>Tid fra</label>
-            <input
-              type="time"
-              value={params.timeFrom}
-              onChange={(e) => setParams({ timeFrom: e.target.value })}
-            />
-          </div>
-          <div className="form-group">
-            <label>Tid til</label>
-            <input
-              type="time"
-              value={params.timeTo}
-              onChange={(e) => setParams({ timeTo: e.target.value })}
-            />
-          </div>
         </div>
+
         <p style={{ fontSize: '0.85rem', color: 'var(--grey-600)' }}>
-          Kampformat: {getMatchDurationLabel(params.matchFormat)} + {params.periodBreak} min pause
-          mellom perioder. Slot per kamp inkl. pause mellom kamper: ca.{' '}
-          {params.matchBreak} min etter kamp.
+          {getMatchDurationLabel(params.matchFormat)} + {params.periodBreak} min pause mellom
+          perioder. Ca. {slotDurationMinutes(params)} min per kamp inkl. pause.{' '}
+          <strong>{slots}</strong> kampplasser totalt ({params.courtCount} bane
+          {params.courtCount > 1 ? 'r' : ''} × {params.days.length} dag
+          {params.days.length > 1 ? 'er' : ''}).
         </p>
+
         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginTop: '1rem' }}>
           <button type="button" className="btn btn-primary" onClick={generate}>
             Generer kamprogram
@@ -145,7 +292,7 @@ export function AdminSchedule() {
           <ul className="match-list">
             {cup.matches.map((m) => (
               <li key={m.id} className="match-item">
-                <span className="match-time">{formatMatchTime(m.startTime)}</span>
+                <span className="match-time">{formatMatchTime(m.startTime, m.court)}</span>
                 <span className="match-teams">
                   {teamName(m.homeTeamId)}
                   <span className="vs">vs</span>

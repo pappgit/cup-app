@@ -50,7 +50,7 @@ export function HomePage() {
             <ul className="match-list" style={{ marginTop: '1rem' }}>
               {favoriteMatches.map((m) => (
                 <li key={m.id} className="match-item match-favorite">
-                  <span className="match-time">{formatMatchTime(m.startTime)}</span>
+                  <span className="match-time">{formatMatchTime(m.startTime, m.court)}</span>
                   <span className="match-teams">
                     {teamName(m.homeTeamId)}
                     <span className="vs">vs</span>
@@ -73,7 +73,7 @@ export function HomePage() {
           <ul className="match-list">
             {upcoming.map((m) => (
               <li key={m.id} className="match-item">
-                <span className="match-time">{formatMatchTime(m.startTime)}</span>
+                <span className="match-time">{formatMatchTime(m.startTime, m.court)}</span>
                 <span className="match-teams">
                   {teamName(m.homeTeamId)}
                   <span className="vs">vs</span>

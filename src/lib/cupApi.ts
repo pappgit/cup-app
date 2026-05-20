@@ -34,7 +34,7 @@ export async function fetchCup(): Promise<CupData & { cupId: string }> {
 
   const [teamsRes, matchesRes, shopRes, sponsorsRes] = await Promise.all([
     client.from('teams').select('id, name, sort_order').eq('cup_id', cupId).order('sort_order'),
-    client.from('matches').select('id, home_team_id, away_team_id, start_time, round').eq('cup_id', cupId).order('start_time'),
+    client.from('matches').select('id, home_team_id, away_team_id, start_time, round, court').eq('cup_id', cupId).order('start_time'),
     client.from('shop_items').select('id, name, price, description, available, sort_order').eq('cup_id', cupId).order('sort_order'),
     client.from('sponsors').select('id, name, logo_url, sort_order').eq('cup_id', cupId).order('sort_order'),
   ]);
@@ -55,6 +55,7 @@ export async function fetchCup(): Promise<CupData & { cupId: string }> {
       homeTeamId: m.home_team_id,
       awayTeamId: m.away_team_id,
       startTime: m.start_time,
+      court: m.court ?? undefined,
       round: m.round ?? undefined,
     })),
     shopItems: (shopRes.data ?? []).map((s) => ({
@@ -158,6 +159,7 @@ export async function persistCup(data: CupData, cupId?: string): Promise<string>
         home_team_id: m.homeTeamId,
         away_team_id: m.awayTeamId,
         start_time: m.startTime,
+        court: m.court ?? null,
         round: m.round ?? null,
       })),
       { onConflict: 'id' }

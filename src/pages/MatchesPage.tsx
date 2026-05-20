@@ -54,7 +54,7 @@ export function MatchesPage() {
                   key={m.id}
                   className={`match-item ${isFavorite ? 'match-favorite' : ''}`}
                 >
-                  <span className="match-time">{formatMatchTime(m.startTime)}</span>
+                  <span className="match-time">{formatMatchTime(m.startTime, m.court)}</span>
                   <span className="match-teams">
                     {teamName(m.homeTeamId)}
                     <span className="vs">vs</span>

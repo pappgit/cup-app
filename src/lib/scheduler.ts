@@ -1,4 +1,5 @@
 import type { Match, ScheduleParams, Team } from '../types';
+import { normalizeScheduleParams } from './scheduleParams';
 
 function matchDurationMinutes(params: ScheduleParams): number {
   const [periods, periodMin] = params.matchFormat.split('x').map(Number);
@@ -7,7 +8,7 @@ function matchDurationMinutes(params: ScheduleParams): number {
   return playTime + pauses;
 }
 
-function slotDurationMinutes(params: ScheduleParams): number {
+export function slotDurationMinutes(params: ScheduleParams): number {
   return matchDurationMinutes(params) + params.matchBreak;
 }
 
@@ -22,8 +23,41 @@ function formatTime(d: Date): string {
   return d.toISOString();
 }
 
+interface TimeSlice {
+  start: Date;
+}
+
+/** Tidslufter per dag der opptil courtCount kamper kan spilles parallelt. */
+function buildTimeSlices(params: ScheduleParams): TimeSlice[] {
+  const p = normalizeScheduleParams(params);
+  const slotMin = slotDurationMinutes(p);
+  const matchDur = matchDurationMinutes(p);
+  const slices: TimeSlice[] = [];
+
+  for (const day of p.days) {
+    let current = parseTime(day.date, day.timeFrom);
+    const dayEnd = parseTime(day.date, day.timeTo);
+
+    while (current.getTime() + matchDur * 60_000 <= dayEnd.getTime()) {
+      slices.push({ start: new Date(current) });
+      current = new Date(current.getTime() + slotMin * 60_000);
+    }
+  }
+
+  return slices;
+}
+
+export function countScheduleSlots(params: ScheduleParams): number {
+  const p = normalizeScheduleParams(params);
+  return buildTimeSlices(p).length * p.courtCount;
+}
+
 /** Generate pairings so each team plays exactly `gamesPerTeam` matches. */
-function generatePairings(teams: Team[], gamesPerTeam: number, seriesPlay: boolean): Omit<Match, 'startTime'>[] {
+function generatePairings(
+  teams: Team[],
+  gamesPerTeam: number,
+  seriesPlay: boolean
+): { home: string; away: string }[] {
   const n = teams.length;
   if (n < 2) return [];
 
@@ -32,7 +66,6 @@ function generatePairings(teams: Team[], gamesPerTeam: number, seriesPlay: boole
   teams.forEach((t) => gamesPlayed.set(t.id, 0));
 
   if (seriesPlay && n >= 2) {
-    // Round-robin style: each team plays others in rotating order
     const ids = teams.map((t) => t.id);
     let round = 0;
     const maxRounds = gamesPerTeam;
@@ -56,7 +89,6 @@ function generatePairings(teams: Team[], gamesPerTeam: number, seriesPlay: boole
         gamesPlayed.set(away, (gamesPlayed.get(away) ?? 0) + 1);
       }
 
-      // Rotate teams (keep first fixed for odd count)
       if (n > 2) {
         const last = ids.pop()!;
         ids.splice(1, 0, last);
@@ -65,12 +97,11 @@ function generatePairings(teams: Team[], gamesPerTeam: number, seriesPlay: boole
     }
   }
 
-  // Fill remaining games with greedy pairing (avoid duplicate opponents when possible)
   const opponentCount = new Map<string, number>();
   const key = (a: string, b: string) => (a < b ? `${a}-${b}` : `${b}-${a}`);
 
-  for (const p of pairings) {
-    const k = key(p.home, p.away);
+  for (const pr of pairings) {
+    const k = key(pr.home, pr.away);
     opponentCount.set(k, (opponentCount.get(k) ?? 0) + 1);
   }
 
@@ -104,39 +135,55 @@ function generatePairings(teams: Team[], gamesPerTeam: number, seriesPlay: boole
     attempts++;
   }
 
-  return pairings.map((p, i) => ({
-    id: `match-${i}-${Date.now()}`,
-    homeTeamId: p.home,
-    awayTeamId: p.away,
-    round: Math.floor(i / Math.floor(n / 2)) + 1,
-  }));
+  return pairings;
 }
 
-export function generateSchedule(teams: Team[], params: ScheduleParams): Match[] {
+export function generateSchedule(teams: Team[], rawParams: ScheduleParams): Match[] {
+  const params = normalizeScheduleParams(rawParams);
   const pairings = generatePairings(teams, params.gamesPerTeam, params.seriesPlay);
-  const slotMin = slotDurationMinutes(params);
-  const start = parseTime(params.startDate, params.timeFrom);
-  let dayEnd = parseTime(params.startDate, params.timeTo);
+  const slices = buildTimeSlices(params);
+  const courts = params.courts.slice(0, params.courtCount);
 
+  if (pairings.length === 0) return [];
+
+  const remaining = [...pairings];
   const matches: Match[] = [];
-  let current = new Date(start);
+  let sliceIndex = 0;
+  let unscheduledStreak = 0;
+  const maxStreak = slices.length * 2 + 10;
 
-  for (const p of pairings) {
-    const matchEnd = new Date(current.getTime() + matchDurationMinutes(params) * 60_000);
-    if (matchEnd > dayEnd) {
-      const nextDay = new Date(current);
-      nextDay.setDate(nextDay.getDate() + 1);
-      const dateStr = nextDay.toISOString().slice(0, 10);
-      current = parseTime(dateStr, params.timeFrom);
-      dayEnd = parseTime(dateStr, params.timeTo);
+  while (remaining.length > 0 && sliceIndex < slices.length && unscheduledStreak < maxStreak) {
+    const slice = slices[sliceIndex];
+    const busyTeams = new Set<string>();
+    let scheduledInSlice = 0;
+
+    for (const court of courts) {
+      const idx = remaining.findIndex(
+        (p) => !busyTeams.has(p.home) && !busyTeams.has(p.away)
+      );
+      if (idx === -1) break;
+
+      const p = remaining.splice(idx, 1)[0];
+      busyTeams.add(p.home);
+      busyTeams.add(p.away);
+      scheduledInSlice++;
+
+      matches.push({
+        id: `match-${matches.length}-${Date.now()}`,
+        homeTeamId: p.home,
+        awayTeamId: p.away,
+        startTime: formatTime(slice.start),
+        court,
+        round: Math.floor(matches.length / Math.max(1, Math.floor(teams.length / 2))) + 1,
+      });
     }
 
-    matches.push({
-      ...p,
-      startTime: formatTime(current),
-    });
-
-    current = new Date(current.getTime() + slotMin * 60_000);
+    if (scheduledInSlice > 0) {
+      unscheduledStreak = 0;
+    } else {
+      unscheduledStreak++;
+    }
+    sliceIndex++;
   }
 
   return matches;
@@ -152,13 +199,14 @@ export function getMatchDurationLabel(format: ScheduleParams['matchFormat']): st
   return labels[format];
 }
 
-export function formatMatchTime(iso: string): string {
+export function formatMatchTime(iso: string, court?: string): string {
   const d = new Date(iso);
-  return d.toLocaleString('nb-NO', {
+  const when = d.toLocaleString('nb-NO', {
     weekday: 'short',
     day: 'numeric',
     month: 'short',
     hour: '2-digit',
     minute: '2-digit',
   });
+  return court ? `${when} · ${court}` : when;
 }
