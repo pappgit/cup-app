@@ -24,9 +24,11 @@ Webapp for innebandy-cup — publiseres på GitHub Pages med **Supabase** som de
 
 ```env
 VITE_SUPABASE_URL=https://xxxx.supabase.co
-VITE_SUPABASE_ANON_KEY=eyJ...
+VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 VITE_CUP_SLUG=active
 ```
+
+Du kan også bruke legacy `VITE_SUPABASE_ANON_KEY` (eyJ…) i stedet for publishable key.
 
 6. Under **Database → Replication**, sjekk at tabellene er med i Realtime (migration prøver å legge dem til automatisk)
 
