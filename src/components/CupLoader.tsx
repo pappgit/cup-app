@@ -1,17 +1,19 @@
 import type { ReactNode } from 'react';
 import { useCup } from '../hooks/useCup';
-import { isSupabaseConfigured } from '../lib/supabase';
+import { getSupabaseConfigStatus } from '../lib/supabase';
 
 export function CupLoader({ children }: { children: ReactNode }) {
   const { loading, error } = useCup();
+  const config = getSupabaseConfigStatus();
 
-  if (!isSupabaseConfigured) {
+  if (!config.ok) {
     return (
       <div className="card" style={{ margin: '2rem 0' }}>
         <h2>Supabase ikke konfigurert</h2>
-        <p>
-          Opprett <code>.env</code> med <code>VITE_SUPABASE_URL</code> og{' '}
-          <code>VITE_SUPABASE_ANON_KEY</code>. Se <code>.env.example</code> og README.
+        <p>{config.message}</p>
+        <p style={{ fontSize: '0.85rem', color: 'var(--grey-600)', marginTop: '0.75rem' }}>
+          GitHub Pages: sjekk at <code>VITE_SUPABASE_URL</code> og publishable/anon key ligger i
+          repo Secrets, deretter kjør deploy på nytt.
         </p>
       </div>
     );
