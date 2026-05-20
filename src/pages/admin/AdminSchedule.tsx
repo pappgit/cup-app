@@ -281,6 +281,9 @@ export function AdminSchedule() {
                 setParams({ gamesPerTeam: Number(e.target.value) as ScheduleParams['gamesPerTeam'] })
               }
             >
+              <option value={2}>2 kamper</option>
+              <option value={3}>3 kamper</option>
+              <option value={4}>4 kamper</option>
               <option value={5}>5 kamper</option>
               <option value={6}>6 kamper</option>
               <option value={7}>7 kamper</option>

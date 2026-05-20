@@ -1,7 +1,7 @@
 export type MatchFormat = '2x15' | '2x20' | '3x15' | '3x20';
 export type PeriodBreak = 5 | 10;
 export type MatchBreak = 5 | 10 | 15;
-export type GamesPerTeam = 5 | 6 | 7;
+export type GamesPerTeam = 2 | 3 | 4 | 5 | 6 | 7;
 export type CupDays = 1 | 2 | 3;
 export type CourtCount = 1 | 2 | 3;
 
