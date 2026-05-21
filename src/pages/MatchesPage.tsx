@@ -2,10 +2,12 @@ import { useMemo } from 'react';
 import { MatchList } from '../components/MatchList';
 import { ScheduleTeamFilter } from '../components/ScheduleTeamFilter';
 import { isPlayoffPhase } from '../lib/groups';
+import { useCup } from '../hooks/useCup';
 import { useCupMatchDisplay } from '../hooks/useCupMatchDisplay';
 import { useFavoriteTeam } from '../hooks/useFavoriteTeam';
 
 export function MatchesPage() {
+  const { cup } = useCup();
   const { matches: cupMatches, groupStageComplete, teamName } = useCupMatchDisplay();
   const { teamId: viewFilter, setFavorite: setViewFilter } = useFavoriteTeam();
 
