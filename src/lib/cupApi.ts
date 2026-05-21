@@ -101,10 +101,17 @@ export async function fetchCup(): Promise<CupData & { cupId: string }> {
 
   const cupId = cupRow.id;
 
-  const [teamsRes, shopRes] = await Promise.all([
-    client.from('teams').select('id, name, sort_order').eq('cup_id', cupId).order('sort_order'),
-    client.from('shop_items').select('id, name, price, description, available, sort_order').eq('cup_id', cupId).order('sort_order'),
-  ]);
+  const teamsRes = await client
+    .from('teams')
+    .select('id, name, sort_order')
+    .eq('cup_id', cupId)
+    .order('sort_order');
+
+  let shopRes = await client
+    .from('shop_items')
+    .select('id, name, price, description, image_url, available, sort_order')
+    .eq('cup_id', cupId)
+    .order('sort_order');
 
   let sponsorsRes = await client
     .from('sponsors')
@@ -146,6 +153,14 @@ export async function fetchCup(): Promise<CupData & { cupId: string }> {
       .order('start_time');
   }
 
+  if (shopRes.error?.message?.includes('image_url')) {
+    shopRes = await client
+      .from('shop_items')
+      .select('id, name, price, description, available, sort_order')
+      .eq('cup_id', cupId)
+      .order('sort_order');
+  }
+
   if (teamsRes.error) throw teamsRes.error;
   if (matchesRes.error) throw matchesRes.error;
   if (shopRes.error) throw shopRes.error;
@@ -177,6 +192,7 @@ export async function fetchCup(): Promise<CupData & { cupId: string }> {
       name: s.name,
       price: Number(s.price),
       description: s.description ?? undefined,
+      imageUrl: s.image_url ?? undefined,
       available: s.available,
     })),
     sponsors: (sponsorsRes.data ?? []).map((s) =>
@@ -288,18 +304,33 @@ export async function persistCup(data: CupData, cupId?: string): Promise<string>
 
   // Shop
   if (data.shopItems.length > 0) {
-    const { error } = await client.from('shop_items').upsert(
+    let { error } = await client.from('shop_items').upsert(
       data.shopItems.map((s, i) => ({
         id: s.id,
         cup_id: id,
         name: s.name,
         price: s.price,
         description: s.description ?? null,
+        image_url: s.imageUrl ?? null,
         available: s.available,
         sort_order: i,
       })),
       { onConflict: 'id' }
     );
+    if (error?.message?.includes('image_url')) {
+      ({ error } = await client.from('shop_items').upsert(
+        data.shopItems.map((s, i) => ({
+          id: s.id,
+          cup_id: id,
+          name: s.name,
+          price: s.price,
+          description: s.description ?? null,
+          available: s.available,
+          sort_order: i,
+        })),
+        { onConflict: 'id' }
+      ));
+    }
     if (error) throw error;
   }
   {
@@ -338,6 +369,25 @@ export async function persistCup(data: CupData, cupId?: string): Promise<string>
   }
 
   return id;
+}
+
+export async function uploadShopItemImage(
+  cupId: string,
+  itemId: string,
+  file: File
+): Promise<string> {
+  const client = requireClient();
+  const ext = file.name.split('.').pop() || 'png';
+  const path = `${cupId}/shop/${itemId}.${ext}`;
+
+  const { error: uploadError } = await client.storage
+    .from('sponsors')
+    .upload(path, file, { upsert: true, contentType: file.type });
+
+  if (uploadError) throw uploadError;
+
+  const { data } = client.storage.from('sponsors').getPublicUrl(path);
+  return data.publicUrl;
 }
 
 export async function uploadKioskImage(cupId: string, file: File): Promise<string> {

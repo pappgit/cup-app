@@ -90,6 +90,7 @@ export interface ShopItem {
   name: string;
   price: number;
   description?: string;
+  imageUrl?: string;
   available: boolean;
 }
 

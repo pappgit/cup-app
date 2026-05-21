@@ -31,11 +31,14 @@ export function ShopPage() {
         <div className="shop-grid">
           {items.map((item) => (
             <div key={item.id} className="shop-item card">
-              <h3 style={{ margin: '0 0 0.5rem', fontSize: '1rem' }}>{item.name}</h3>
+              {item.imageUrl && (
+                <div className="shop-item-image-wrap">
+                  <img src={item.imageUrl} alt="" className="shop-item-image" />
+                </div>
+              )}
+              <h3 className="shop-item-name">{item.name}</h3>
               {item.description && (
-                <p style={{ fontSize: '0.85rem', color: 'var(--grey-600)', margin: '0 0 0.5rem' }}>
-                  {item.description}
-                </p>
+                <p className="shop-item-desc">{item.description}</p>
               )}
               <div className="shop-price">{item.price} kr</div>
             </div>

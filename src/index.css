@@ -955,10 +955,42 @@ img {
   background: var(--white);
   border: 1px solid var(--grey-200);
   border-radius: var(--radius);
-  padding: 1.15rem;
+  padding: 0;
   text-align: center;
   box-shadow: var(--shadow-xs);
   transition: transform 0.2s, box-shadow 0.2s;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.shop-item-image-wrap {
+  background: var(--grey-100);
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+}
+
+.shop-item-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.shop-item-name {
+  margin: 0.85rem 0.75rem 0.35rem;
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.shop-item-desc {
+  margin: 0 0.75rem 0.5rem;
+  font-size: 0.85rem;
+  color: var(--grey-600);
+}
+
+.shop-item .shop-price {
+  margin: 0 0.75rem 1rem;
 }
 
 .shop-item:hover {
@@ -975,6 +1007,99 @@ img {
   font-weight: 800;
   color: var(--purple);
   letter-spacing: -0.02em;
+}
+
+.shop-admin-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.shop-admin-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.85rem;
+  align-items: center;
+  padding: 0.75rem;
+  border: 1px solid var(--grey-200);
+  border-radius: var(--radius-sm);
+  background: var(--grey-50);
+}
+
+.shop-admin-item-media {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  width: 5.5rem;
+}
+
+.shop-admin-item-thumb {
+  width: 5.5rem;
+  height: 5.5rem;
+  object-fit: cover;
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--grey-200);
+  background: var(--white);
+}
+
+.shop-admin-item-thumb--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  color: var(--grey-500);
+  text-align: center;
+  padding: 0.25rem;
+}
+
+.shop-admin-item-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.shop-admin-item-meta {
+  font-size: 0.85rem;
+  color: var(--grey-600);
+}
+
+.shop-admin-item-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.shop-new-item-preview {
+  margin-bottom: 0.5rem;
+  max-width: 160px;
+  border-radius: var(--radius-xs);
+  overflow: hidden;
+  border: 1px solid var(--grey-200);
+}
+
+.shop-new-item-preview img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  object-fit: cover;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* ─── Sponsors ─── */
