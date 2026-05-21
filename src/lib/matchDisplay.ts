@@ -1,9 +1,5 @@
 import type { Group, Match, Team } from '../types';
-import {
-  getResolvedPlayoffTeamIds,
-  isPlayoffMatch,
-  isPlayoffPhase,
-} from './groups';
+import { getResolvedPlayoffTeamIds, isPlayoffMatch } from './groups';
 
 export interface MatchDisplayParts {
   dateKey: string;
