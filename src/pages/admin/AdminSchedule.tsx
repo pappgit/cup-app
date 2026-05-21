@@ -298,6 +298,7 @@ export function AdminSchedule() {
                 <option value={5}>5 kamper</option>
                 <option value={6}>6 kamper</option>
                 <option value={7}>7 kamper</option>
+                <option value={8}>8 kamper</option>
               </select>
             </div>
           )}
@@ -381,10 +382,11 @@ export function AdminSchedule() {
             </div>
           )}
 
-          {!params.seriesPlay && (
+          {!params.seriesPlay && cup.teams.length >= 2 && (
             <p className="schedule-hint">
-              Uten sluttspill: hvert lag møter <strong>forskjellige</strong> motstandere (ingen
-              rematch).
+              Vennskapskamper: round robin (circle method). Hvert lag får valgt antall kamper mot{' '}
+              <strong>ulike</strong> motstandere — ingen rematch. Maks{' '}
+              {cup.teams.length - 1} kamper per lag med {cup.teams.length} lag.
             </p>
           )}
 

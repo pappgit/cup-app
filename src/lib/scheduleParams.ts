@@ -17,6 +17,7 @@ function asCourtCount(value: unknown): CourtCount {
 
 function asGamesPerTeam(value: unknown): GamesPerTeam {
   const n = Number(value);
+  if (n >= 8) return 8;
   if (n >= 7) return 7;
   if (n >= 6) return 6;
   if (n >= 5) return 5;
