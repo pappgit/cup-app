@@ -1,15 +1,18 @@
 import { useMemo, useState } from 'react';
-import { useCup } from '../../hooks/useCup';
-import { useCupMatchDisplay } from '../../hooks/useCupMatchDisplay';
-import type { CupDaySchedule, ScheduleParams } from '../../types';
-import { DEFAULT_SCHEDULE_PARAMS } from '../../types';
-import {
-  PLAYOFF_COURT,
-  computeGroupLayout,
-  describeGroupPlan,
-} from '../../lib/groups';
+import { GroupSetupEditor } from '../../components/GroupSetupEditor';
+import { StandingsTables } from '../../components/StandingsTables';
 import { CourtAvailabilityMatrix } from '../../components/CourtAvailabilityMatrix';
 import { MatchList } from '../../components/MatchList';
+import { useCup } from '../../hooks/useCup';
+import {
+  PLAYOFF_COURT,
+  assignTeamsToGroups,
+  computeGroupLayout,
+  describeGroupPlan,
+  moveTeamInGroups,
+  resolveGroupsForCup,
+} from '../../lib/groups';
+import { hasUnpublishedDraft, getDraftMatches } from '../../lib/scheduleDraft';
 import {
   getMatchDurationLabel,
   calculateScheduleEstimate,
@@ -22,17 +25,30 @@ import {
   syncAllDaysCourtTimes,
   getActiveCourtNames,
 } from '../../lib/scheduleParams';
+import type { CupDaySchedule, Group, ScheduleParams } from '../../types';
+import { DEFAULT_SCHEDULE_PARAMS } from '../../types';
 import type { ScheduleEstimate } from '../../lib/scheduler';
 
 export function AdminSchedule() {
-  const { cup, update } = useCup();
-  const { matches: cupMatches } = useCupMatchDisplay();
+  const { cup, update, saving } = useCup();
   const params = useMemo(
     () => normalizeScheduleParams(cup.scheduleParams ?? DEFAULT_SCHEDULE_PARAMS),
     [cup.scheduleParams]
   );
   const [msg, setMsg] = useState('');
   const [estimate, setEstimate] = useState<ScheduleEstimate | null>(null);
+
+  const groups = useMemo(
+    () => resolveGroupsForCup(cup.teams, params),
+    [cup.teams, params]
+  );
+
+  const draftMatches = useMemo(
+    () => getDraftMatches(params, cup.matches),
+    [params, cup.matches]
+  );
+
+  const pendingPublish = hasUnpublishedDraft(params, cup.matches);
 
   const setParams = (patch: Partial<ScheduleParams>) => {
     let merged = { ...params, ...patch };
@@ -43,6 +59,39 @@ export function AdminSchedule() {
     const next = normalizeScheduleParams(merged);
     update({ scheduleParams: next });
     setEstimate(null);
+  };
+
+  const saveDraft = async (nextGroups: Group[], draft: typeof draftMatches) => {
+    const normalized = normalizeScheduleParams({
+      ...params,
+      groups: nextGroups,
+      draftMatches: draft,
+    });
+    await update({ scheduleParams: normalized });
+  };
+
+  const regenerateDraft = async (nextGroups: Group[]) => {
+    const normalized = normalizeScheduleParams({ ...params, groups: nextGroups });
+    const check = validateSchedule(cup.teams, normalized);
+    if (!check.ok) {
+      setMsg(check.errors.join(' '));
+      return false;
+    }
+
+    const result = generateScheduleWithMeta(cup.teams, normalized);
+    if (result.matches.length === 0) {
+      setMsg('Ingen kamper ble plassert. Sjekk halltid i matrisen.');
+      return false;
+    }
+    if (result.unscheduled > 0) {
+      setMsg(
+        `Ikke nok tid: ${result.unscheduled} av ${result.pairingsCount} kamper kunne ikke plasseres.`
+      );
+      return false;
+    }
+
+    await saveDraft(result.groups, result.matches);
+    return true;
   };
 
   const handleDaysChange = (days: CupDaySchedule[]) => {
@@ -75,6 +124,16 @@ export function AdminSchedule() {
     }
   }, [cup.teams, params]);
 
+  const initGroups = async () => {
+    const layout = computeGroupLayout(cup.teams.length);
+    const nextGroups = assignTeamsToGroups(cup.teams, layout);
+    await update({
+      scheduleParams: normalizeScheduleParams({ ...params, groups: nextGroups }),
+    });
+    setMsg('Lag fordelt i grupper. Juster under Kampoppsett og generer kamprogram.');
+    setTimeout(() => setMsg(''), 5000);
+  };
+
   const generate = async () => {
     const normalized = normalizeScheduleParams(params);
     const check = validateSchedule(cup.teams, normalized);
@@ -101,10 +160,10 @@ export function AdminSchedule() {
     }
 
     await update({
-      matches: result.matches,
       scheduleParams: {
         ...normalized,
         groups: result.groups.length > 0 ? result.groups : undefined,
+        draftMatches: result.matches,
       },
     });
 
@@ -114,19 +173,55 @@ export function AdminSchedule() {
 
     if (result.backToBackTeams > 0) {
       setMsg(
-        `Generert ${result.matches.length} kamper. Advarsel: ${result.backToBackTeams} lag har kamper med liten pause` +
+        `Utkast med ${result.matches.length} kamper er klart. Advarsel: ${result.backToBackTeams} lag har kamper med liten pause` +
           (tightNames ? ` (${tightNames})` : '') +
-          ' — vurder mer halltid i matrisen.'
+          '. Bekreft kampoppsett nederst for å publisere.'
       );
     } else {
-      setMsg(`Generert ${result.matches.length} kamper!`);
+      setMsg(
+        `Utkast med ${result.matches.length} kamper er klart. Bekreft kampoppsett nederst for å publisere til forsiden.`
+      );
     }
+    setTimeout(() => setMsg(''), 8000);
+  };
+
+  const handleMoveTeam = async (teamId: string, toGroupId: string) => {
+    const nextGroups = moveTeamInGroups(groups, teamId, toGroupId);
+    const ok = await regenerateDraft(nextGroups);
+    if (ok) {
+      setMsg('Kampoppsett oppdatert i utkast. Bekreft nederst for å publisere.');
+      setTimeout(() => setMsg(''), 5000);
+    }
+  };
+
+  const confirmPublish = async () => {
+    const draft = params.draftMatches;
+    if (!draft || draft.length === 0) {
+      setMsg('Generer kamprogram først.');
+      return;
+    }
+    const normalized = normalizeScheduleParams({
+      ...params,
+      draftMatches: draft,
+    });
+    await update({
+      matches: draft,
+      scheduleParams: normalized,
+    });
+    setMsg('Kampoppsett er publisert til forsiden og Kamper.');
     setTimeout(() => setMsg(''), 5000);
   };
 
   const clearMatches = async () => {
-    if (confirm('Slette hele kamprogrammet?')) {
-      await update({ matches: [] });
+    if (confirm('Slette hele kamprogrammet (utkast og publisert)?')) {
+      await update({
+        matches: [],
+        scheduleParams: normalizeScheduleParams({
+          ...params,
+          draftMatches: undefined,
+          groups: undefined,
+        }),
+      });
     }
   };
 
@@ -223,9 +318,9 @@ export function AdminSchedule() {
             Beregn
           </button>
           <button type="button" className="btn btn-primary" onClick={generate}>
-            Generer kamprogram
+            Generer kamprogram (utkast)
           </button>
-          {cup.matches.length > 0 && (
+          {(draftMatches.length > 0 || cup.matches.length > 0) && (
             <button type="button" className="btn btn-outline" onClick={clearMatches}>
               Slett program
             </button>
@@ -236,10 +331,19 @@ export function AdminSchedule() {
           {msg && (
             <div
               className={`alert ${
-                msg.startsWith('Generert ') ? 'alert-success' : 'alert-error'
+                msg.includes('publisert') || msg.includes('klart') || msg.includes('oppdatert')
+                  ? 'alert-success'
+                  : 'alert-error'
               }`}
             >
               {msg}
+            </div>
+          )}
+
+          {pendingPublish && (
+            <div className="alert alert-info-soft">
+              <strong>Utkast venter på bekreftelse.</strong> Forsiden viser fortsatt det
+              publiserte programmet til du trykker «Bekreft kampoppsett» nederst på siden.
             </div>
           )}
 
@@ -292,24 +396,94 @@ export function AdminSchedule() {
         </div>
       </div>
 
-      {cupMatches.length > 0 && (
-        <div className="card">
+      {params.seriesPlay && cup.teams.length >= 2 && (
+        <div className="card" style={{ marginBottom: '1.5rem' }}>
+          <h2>Kampoppsett</h2>
+          <p className="schedule-hint" style={{ marginTop: 0 }}>
+            Fordeling av lag i grupper og hvem som møter hvem i gruppespill. Flytt lag mellom
+            grupper – kamprogrammet (utkast) oppdateres automatisk.
+          </p>
+
+          {groups.length === 0 && (
+            <button type="button" className="btn btn-outline" onClick={initGroups}>
+              Fordel lag i grupper
+            </button>
+          )}
+
+          {groups.length > 0 && (
+            <>
+              <GroupSetupEditor
+                groups={groups}
+                teams={cup.teams}
+                onMoveTeam={handleMoveTeam}
+              />
+              <div style={{ marginTop: '1.5rem' }}>
+                <StandingsTables
+                  groups={groups}
+                  matches={draftMatches}
+                  teams={cup.teams}
+                  title="Tabell (utkast / publisert)"
+                  compact
+                />
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {draftMatches.length > 0 && (
+        <div className="card" style={{ marginBottom: '5rem' }}>
           <h2>
-            Kamprogram
-            <span className="match-count-badge">{cupMatches.length}</span>
+            Kamprogram (utkast)
+            <span className="match-count-badge">{draftMatches.length}</span>
           </h2>
           <p className="schedule-hint" style={{ marginTop: 0 }}>
-            Inkluderer sluttspill med tid og bane. Lag i sluttspill oppdateres når resultater
-            legges inn.
+            Vises kun her til du bekrefter. Inkluderer sluttspill med tid og bane.
           </p>
           <MatchList
-            matches={[...cupMatches].sort(
+            matches={[...draftMatches].sort(
+              (a, b) =>
+                new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+            )}
+            resolveMatches={draftMatches}
+            teamName={teamName}
+            showDayHeaders
+          />
+        </div>
+      )}
+
+      {cup.matches.length > 0 && !pendingPublish && draftMatches.length === 0 && (
+        <div className="card" style={{ marginBottom: '5rem' }}>
+          <h2>
+            Kamprogram (publisert)
+            <span className="match-count-badge">{cup.matches.length}</span>
+          </h2>
+          <MatchList
+            matches={[...cup.matches].sort(
               (a, b) =>
                 new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
             )}
             teamName={teamName}
             showDayHeaders
           />
+        </div>
+      )}
+
+      {(params.draftMatches?.length ?? 0) > 0 && (
+        <div className="schedule-confirm-bar">
+          <p className="schedule-confirm-text">
+            {pendingPublish
+              ? 'Utkastet er ikke synlig på forsiden ennå.'
+              : 'Kamprogrammet er publisert. Generer på nytt for å lage nytt utkast.'}
+          </p>
+          <button
+            type="button"
+            className="btn btn-primary btn-lg"
+            disabled={saving || !pendingPublish}
+            onClick={confirmPublish}
+          >
+            Bekreft kampoppsett
+          </button>
         </div>
       )}
     </>

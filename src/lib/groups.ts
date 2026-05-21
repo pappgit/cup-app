@@ -318,7 +318,62 @@ export function buildPlayoffSlots(
   return generatePlayoffSlots(groups, layout.groupCount, teamCount);
 }
 
-export function generateSeriesPairings(teams: Team[]): {
+/** Synk grupper med gjeldende lagliste (alle lag nøyaktig én gang). */
+export function syncGroupsWithTeams(
+  groups: Group[],
+  teams: Team[],
+  layout: GroupLayout
+): Group[] {
+  const validIds = new Set(teams.map((t) => t.id));
+  const placed = new Set<string>();
+
+  const synced = groups.map((g) => {
+    const teamIds = g.teamIds.filter((id) => validIds.has(id) && !placed.has(id));
+    teamIds.forEach((id) => placed.add(id));
+    return { ...g, teamIds };
+  });
+
+  const unplaced = teams.map((t) => t.id).filter((id) => !placed.has(id));
+  const sizes = layout.sizes;
+
+  for (const teamId of unplaced) {
+    const target =
+      synced.find((g, i) => g.teamIds.length < (sizes[i] ?? Infinity)) ??
+      synced.reduce((a, b) => (a.teamIds.length <= b.teamIds.length ? a : b));
+    target.teamIds.push(teamId);
+  }
+
+  return synced;
+}
+
+/** Flytt lag fra én gruppe til en annen. */
+export function moveTeamInGroups(
+  groups: Group[],
+  teamId: string,
+  toGroupId: string
+): Group[] {
+  return groups.map((g) => {
+    const without = g.teamIds.filter((id) => id !== teamId);
+    if (g.id === toGroupId) {
+      return { ...g, teamIds: [...without, teamId] };
+    }
+    return { ...g, teamIds: without };
+  });
+}
+
+/** Liste gruppespillkamper (uten tider) for kampoppsett-visning. */
+export function listGroupStagePairings(groups: Group[]): ScheduledPairing[] {
+  const pairings: ScheduledPairing[] = [];
+  for (const group of groups) {
+    pairings.push(...roundRobinPairings(group.id, group.teamIds));
+  }
+  return pairings;
+}
+
+export function generateSeriesPairings(
+  teams: Team[],
+  fixedGroups?: Group[]
+): {
   groups: Group[];
   pairings: ScheduledPairing[];
   layout: GroupLayout;
@@ -328,7 +383,10 @@ export function generateSeriesPairings(teams: Team[]): {
   }
 
   const layout = computeGroupLayout(teams.length);
-  const groups = assignTeamsToGroups(teams, layout);
+  const groups =
+    fixedGroups && fixedGroups.length > 0
+      ? syncGroupsWithTeams(fixedGroups, teams, layout)
+      : assignTeamsToGroups(teams, layout);
   const pairings: ScheduledPairing[] = [];
 
   for (const group of groups) {

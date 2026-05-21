@@ -7,6 +7,8 @@ import { MatchCard } from './MatchCard';
 
 interface MatchListProps {
   matches: Match[];
+  /** Brukes til tabell/sluttspill-oppslag når kamper vises fra utkast */
+  resolveMatches?: Match[];
   teamName?: (id: string) => string;
   favoriteTeamId?: string | null;
   emptyMessage?: string;
@@ -15,13 +17,14 @@ interface MatchListProps {
 
 export function MatchList({
   matches,
+  resolveMatches,
   teamName: teamNameProp,
   favoriteTeamId = null,
   emptyMessage = 'Ingen kamper å vise ennå.',
   showDayHeaders = true,
 }: MatchListProps) {
   const { cup } = useCup();
-  const display = useCupMatchDisplay();
+  const display = useCupMatchDisplay(resolveMatches);
   const teamName = teamNameProp ?? display.teamName;
   const getTeamNames = display.getTeamNames;
   const getLabel = display.getLabel;
@@ -44,7 +47,7 @@ export function MatchList({
               const resolved = getResolvedPlayoffTeamIds(
                 m,
                 display.groups,
-                cup.matches,
+                resolveMatches ?? cup.matches,
                 cup.teams
               );
               const homeId = resolved?.home ?? m.homeTeamId;

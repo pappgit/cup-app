@@ -270,12 +270,13 @@ export function generatePairings(
 export function generatePairingsWithGroups(
   teams: Team[],
   gamesPerTeam: number,
-  seriesPlay: boolean
+  seriesPlay: boolean,
+  existingGroups?: Group[]
 ): PairingsResult {
   if (teams.length < 2) return { pairings: [], groups: [] };
 
   if (seriesPlay) {
-    const { groups, pairings } = generateSeriesPairings(teams);
+    const { groups, pairings } = generateSeriesPairings(teams, existingGroups);
     return { pairings, groups };
   }
 
@@ -968,7 +969,8 @@ export function generateScheduleWithMeta(
   const { pairings: rawPairings, groups } = generatePairingsWithGroups(
     teams,
     params.gamesPerTeam,
-    params.seriesPlay
+    params.seriesPlay,
+    params.groups
   );
   const phaseOrder: Record<string, number> = {
     group: 0,

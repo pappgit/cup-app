@@ -14,7 +14,7 @@ import { DEFAULT_SCHEDULE_PARAMS, type Match } from '../types';
 import { useCup } from './useCup';
 
 /** Kamper + visningsregler (sluttspill-lag skjules til gruppespill er ferdig). */
-export function useCupMatchDisplay() {
+export function useCupMatchDisplay(matchesOverride?: Match[]) {
   const { cup } = useCup();
   const params = useMemo(
     () => normalizeScheduleParams(cup.scheduleParams ?? DEFAULT_SCHEDULE_PARAMS),
@@ -26,20 +26,22 @@ export function useCupMatchDisplay() {
     [cup.teams, params]
   );
 
+  const sourceMatches = matchesOverride ?? cup.matches;
+
   const groupStageComplete = useMemo(
-    () => isGroupStageComplete(groups, cup.matches),
-    [groups, cup.matches]
+    () => isGroupStageComplete(groups, sourceMatches),
+    [groups, sourceMatches]
   );
 
   const matches = useMemo(() => {
-    if (!params.seriesPlay) return cup.matches;
-    return applyPlayoffTeamUpdates(cup.matches, cup.teams, groups, params.seriesPlay);
-  }, [cup.matches, cup.teams, groups, params.seriesPlay]);
+    if (!params.seriesPlay) return sourceMatches;
+    return applyPlayoffTeamUpdates(sourceMatches, cup.teams, groups, params.seriesPlay);
+  }, [sourceMatches, cup.teams, groups, params.seriesPlay]);
 
   const teamName = (id: string) => cup.teams.find((t) => t.id === id)?.name ?? 'Ukjent lag';
 
   const getTeamNames = (match: Match) =>
-    getMatchTeamNamesForDisplay(match, teamName, groups, cup.matches, cup.teams);
+    getMatchTeamNamesForDisplay(match, teamName, groups, sourceMatches, cup.teams);
 
   const getLabel = (match: Match) => getMatchLabelForDisplay(match, groupStageComplete);
 

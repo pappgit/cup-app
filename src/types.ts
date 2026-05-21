@@ -45,6 +45,8 @@ export interface ScheduleParams {
   /** Sluttspill Ja = gruppeserie + tabell + sluttspill. Nei = flest mulig unike motstandere. */
   seriesPlay: boolean;
   groups?: Group[];
+  /** Utkast til kamprogram – publiseres først ved bekreftelse (matches). */
+  draftMatches?: Match[];
   cupDays: CupDays;
   days: CupDaySchedule[];
   courtCount: CourtCount;

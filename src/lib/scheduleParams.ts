@@ -237,6 +237,7 @@ export function normalizeScheduleParams(
     gamesPerTeam: asGamesPerTeam(parsed.gamesPerTeam),
     seriesPlay: Boolean(parsed.seriesPlay),
     groups: parsed.groups,
+    draftMatches: parsed.draftMatches,
     cupDays,
     days: normalizedDays,
     courtCount,

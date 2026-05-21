@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { MatchCard } from '../../components/MatchCard';
+import { StandingsTables } from '../../components/StandingsTables';
 import { useCup } from '../../hooks/useCup';
 import {
   applyPlayoffTeamUpdates,
@@ -141,6 +142,21 @@ export function AdminResults() {
           resultat{groupStageComplete ? ' (klar)' : ''}.
         </p>
       </header>
+
+      {params.seriesPlay && groups.length > 0 && (
+        <div className="card" style={{ marginBottom: '1.25rem' }}>
+          <h3>Tabell</h3>
+          <p className="schedule-hint" style={{ marginTop: 0 }}>
+            Oppdateres når du lagrer resultater. Samme tabell som på forsiden under Tabell.
+          </p>
+          <StandingsTables
+            groups={groups}
+            matches={cup.matches}
+            teams={cup.teams}
+            compact
+          />
+        </div>
+      )}
 
       {groupMatches.length > 0 && (
         <div className="card" style={{ marginBottom: '1.25rem' }}>
