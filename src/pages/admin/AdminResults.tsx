@@ -71,18 +71,14 @@ function ResultRow({
   onSave: (id: string, h: string, a: string) => void;
 }) {
   const names = getTeamNames(match);
-  const displayMatch =
-    match.groupId && !match.label
-      ? { ...match, label: `Gruppe ${match.groupId}` }
-      : match;
 
   return (
     <div className="result-row">
       <MatchCard
-        match={displayMatch}
+        match={match}
         homeName={names.homeName}
         awayName={names.awayName}
-        displayLabel={getLabel(match) ?? (match.groupId ? `Gruppe ${match.groupId}` : undefined)}
+        displayLabel={getLabel(match)}
         compact
       />
       <ScoreInputs

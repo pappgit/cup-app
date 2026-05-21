@@ -1,4 +1,5 @@
 import type { Match } from '../types';
+import { formatCourtAbbrev, formatCourtTitle } from '../lib/courtDisplay';
 import { isPlayoffMatch } from '../lib/groups';
 import { getMatchDisplayParts, PLAYOFF_TBD } from '../lib/matchDisplay';
 
@@ -20,16 +21,27 @@ export function MatchCard({
   compact = false,
 }: MatchCardProps) {
   const { time, court } = getMatchDisplayParts(match.startTime, match.court);
+  const courtAbbrev = formatCourtAbbrev(court);
+  const courtTitle = formatCourtTitle(court);
   const hasScore = match.homeScore != null && match.awayScore != null;
   const isPlayoff = isPlayoffMatch(match);
-  const label = displayLabel ?? match.label;
+  const isGroup = match.phase === 'group' && Boolean(match.groupId);
   const teamsPending = isPlayoff && homeName === PLAYOFF_TBD;
+
+  const playoffDetail =
+    isPlayoff && displayLabel && !displayLabel.startsWith('Sluttspill')
+      ? displayLabel
+      : isPlayoff && displayLabel === 'Sluttspill'
+        ? undefined
+        : isPlayoff
+          ? displayLabel
+          : undefined;
 
   return (
     <article
       className={`match-card ${highlight ? 'match-card--highlight' : ''} ${
         compact ? 'match-card--compact' : ''
-      } ${isPlayoff ? 'match-card--playoff' : ''}`}
+      } ${isPlayoff ? 'match-card--playoff' : ''} ${isGroup ? 'match-card--group' : ''}`}
     >
       <div className="match-card-rail">
         {isPlayoff && <span className="match-card-playoff-badge">Sluttspill</span>}
@@ -39,11 +51,25 @@ export function MatchCard({
         <time className="match-card-time" dateTime={match.startTime}>
           {time}
         </time>
-        {court && <span className="match-card-court">{court}</span>}
+        {courtAbbrev && (
+          <span
+            className="match-card-court-abbr"
+            title={courtTitle}
+            aria-label={`Hall: ${court ?? courtAbbrev}`}
+          >
+            {courtAbbrev}
+          </span>
+        )}
       </div>
 
       <div className="match-card-main">
-        {label && <span className="match-card-label">{label}</span>}
+        {isGroup && (
+          <span className="match-card-group-badge">Gruppe {match.groupId}</span>
+        )}
+
+        {isPlayoff && playoffDetail && (
+          <span className="match-card-label match-card-label--playoff">{playoffDetail}</span>
+        )}
 
         {teamsPending ? (
           <p className="match-card-tbd">{PLAYOFF_TBD}</p>
