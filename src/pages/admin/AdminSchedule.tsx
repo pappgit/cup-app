@@ -1,8 +1,13 @@
 import { useMemo, useState } from 'react';
 import { useCup } from '../../hooks/useCup';
 import type { CupDaySchedule, CourtCount, CupDays, ScheduleParams } from '../../types';
-import { AVAILABLE_COURTS, DEFAULT_SCHEDULE_PARAMS } from '../../types';
-import { computeGroupLayout, describeGroupPlan } from '../../lib/groups';
+import { DEFAULT_SCHEDULE_PARAMS } from '../../types';
+import {
+  PLAYOFF_COURT,
+  computeGroupLayout,
+  describeGroupPlan,
+} from '../../lib/groups';
+import { CourtAvailabilityMatrix } from '../../components/CourtAvailabilityMatrix';
 import { MatchList } from '../../components/MatchList';
 import {
   getMatchDurationLabel,
@@ -14,10 +19,9 @@ import {
 import {
   normalizeScheduleParams,
   buildDays,
-  defaultCourts,
   addDays,
   syncAllDaysCourtTimes,
-  getCourtHallTime,
+  getActiveCourtNames,
 } from '../../lib/scheduleParams';
 import type { ScheduleEstimate } from '../../lib/scheduler';
 
@@ -31,68 +35,37 @@ export function AdminSchedule() {
   const [estimate, setEstimate] = useState<ScheduleEstimate | null>(null);
 
   const setParams = (patch: Partial<ScheduleParams>) => {
-    const next = normalizeScheduleParams({ ...params, ...patch });
-    if (patch.courts || patch.courtCount) {
-      next.days = syncAllDaysCourtTimes(next.days, next.courts);
+    let merged = { ...params, ...patch };
+    if (patch.days) {
+      merged.days = syncAllDaysCourtTimes(patch.days);
+      merged.courts = getActiveCourtNames(merged.days);
     }
+    const next = normalizeScheduleParams(merged);
     update({ scheduleParams: next });
     setEstimate(null);
   };
 
   const setCupDays = (cupDays: CupDays) => {
     const days = buildDays(cupDays, params.days[0]);
-    setParams({
-      cupDays,
-      days: syncAllDaysCourtTimes(days, params.courts),
-    });
+    setParams({ cupDays, days });
   };
 
   const setCourtCount = (courtCount: CourtCount) => {
-    const courts = defaultCourts(courtCount);
-    setParams({
-      courtCount,
-      courts,
-      days: syncAllDaysCourtTimes(params.days, courts),
-    });
+    setParams({ courtCount });
   };
 
-  const toggleCourt = (name: string) => {
-    const selected = params.courts.includes(name)
-      ? params.courts.filter((c) => c !== name)
-      : [...params.courts, name];
-    if (selected.length > params.courtCount) return;
-    if (selected.length === 0) return;
-    setParams({
-      courts: selected,
-      days: syncAllDaysCourtTimes(params.days, selected),
-    });
-  };
-
-  const updateDay = (index: number, patch: Partial<CupDaySchedule>) => {
-    let days = params.days.map((d, i) => (i === index ? { ...d, ...patch } : d));
-    if (index === 0 && patch.date && params.cupDays > 1) {
-      for (let i = 1; i < days.length; i++) {
-        days[i] = { ...days[i], date: addDays(patch.date!, i) };
-      }
-    }
-    days = syncAllDaysCourtTimes(days, params.courts);
+  const handleDaysChange = (days: CupDaySchedule[]) => {
     setParams({ days });
   };
 
-  const updateCourtTime = (
-    dayIndex: number,
-    court: string,
-    patch: Partial<{ timeFrom: string; timeTo: string }>
-  ) => {
-    const day = params.days[dayIndex];
-    const hall = getCourtHallTime(day, court);
-    const courtTimes = (day.courtTimes ?? []).map((c) =>
-      c.court === court ? { ...c, ...patch } : c
-    );
-    if (!courtTimes.some((c) => c.court === court)) {
-      courtTimes.push({ court, ...hall, ...patch });
+  const handleDayDateChange = (dayIndex: number, date: string) => {
+    let days = params.days.map((d, i) => (i === dayIndex ? { ...d, date } : d));
+    if (dayIndex === 0 && params.cupDays > 1) {
+      for (let i = 1; i < days.length; i++) {
+        days[i] = { ...days[i], date: addDays(date, i) };
+      }
     }
-    updateDay(dayIndex, { courtTimes });
+    setParams({ days });
   };
 
   const runCalculate = () => {
@@ -184,91 +157,30 @@ export function AdminSchedule() {
             </select>
           </div>
           <div className="form-group">
-            <label>Antall baner</label>
+            <label>Antall baner samtidig</label>
             <select
               value={params.courtCount}
               onChange={(e) => setCourtCount(Number(e.target.value) as CourtCount)}
             >
-              <option value={1}>1 bane</option>
-              <option value={2}>2 baner</option>
-              <option value={3}>3 baner</option>
+              <option value={1}>1 bane om gangen</option>
+              <option value={2}>2 baner om gangen</option>
+              <option value={3}>3 baner om gangen</option>
             </select>
-          </div>
-        </div>
-
-        <div className="form-group">
-          <label>
-            Velg baner <span className="label-hint">({params.courts.length}/{params.courtCount})</span>
-          </label>
-          <div className="court-chip-list">
-            {AVAILABLE_COURTS.map((court) => {
-              const selected = params.courts.includes(court);
-              return (
-                <button
-                  key={court}
-                  type="button"
-                  className={`court-chip ${selected ? 'court-chip--selected' : ''}`}
-                  onClick={() => toggleCourt(court)}
-                  aria-pressed={selected}
-                >
-                  {selected && <span className="court-chip-check" aria-hidden>✓</span>}
-                  {court}
-                </button>
-              );
-            })}
-          </div>
-          {params.courts.length > 0 && (
-            <p className="court-selected-summary">
-              Valgt: <strong>{params.courts.join(', ')}</strong>
+            <p className="label-hint" style={{ marginTop: '0.35rem' }}>
+              Maks antall kamper som kan spilles parallelt i samme tidsluft.
             </p>
-          )}
+          </div>
         </div>
 
-        <details className="schedule-days-panel" open>
-          <summary className="schedule-days-summary">Dager og halltider per bane</summary>
-          <div className="schedule-days-body">
-            {params.days.map((day, dayIndex) => (
-              <div key={day.date} className="schedule-day-block">
-                <div className="schedule-day-head">
-                  <label className="schedule-day-label">Dag {dayIndex + 1}</label>
-                  <input
-                    type="date"
-                    className="schedule-day-date"
-                    value={day.date}
-                    onChange={(e) => updateDay(dayIndex, { date: e.target.value })}
-                  />
-                </div>
-                <div className="schedule-court-times">
-                  {params.courts.map((court) => {
-                    const hall = getCourtHallTime(day, court);
-                    return (
-                      <div key={court} className="schedule-court-row">
-                        <span className="schedule-court-name">{court}</span>
-                        <input
-                          type="time"
-                          value={hall.timeFrom}
-                          onChange={(e) =>
-                            updateCourtTime(dayIndex, court, { timeFrom: e.target.value })
-                          }
-                          aria-label={`${court} tid fra`}
-                        />
-                        <span className="schedule-court-sep">–</span>
-                        <input
-                          type="time"
-                          value={hall.timeTo}
-                          onChange={(e) =>
-                            updateCourtTime(dayIndex, court, { timeTo: e.target.value })
-                          }
-                          aria-label={`${court} tid til`}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
-        </details>
+        <div className="card court-matrix-card">
+          <h2>Spilleflater – tilgjengelighet</h2>
+          <CourtAvailabilityMatrix
+            params={params}
+            slotMinutes={slotMin}
+            onChange={handleDaysChange}
+            onDayDateChange={handleDayDateChange}
+          />
+        </div>
 
         <div className="form-row cols-2" style={{ marginTop: '1rem' }}>
           <div className="form-group">
@@ -393,6 +305,9 @@ export function AdminSchedule() {
             <div className="alert alert-info-soft">
               <strong>Gruppespill ({cup.teams.length} lag):</strong>{' '}
               {describeGroupPlan(cup.teams.length)} · {computeGroupLayout(cup.teams.length).label}
+              <br />
+              <strong>Sluttspill:</strong> kun på {PLAYOFF_COURT} (aktiver i matrisen over). Etter
+              gruppespill fylles lag inn automatisk ut fra tabell.
             </div>
           )}
 

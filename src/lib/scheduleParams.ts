@@ -56,39 +56,60 @@ export function defaultCourts(count: CourtCount): string[] {
   return [...AVAILABLE_COURTS].slice(0, count);
 }
 
+export function isCourtEnabledOnDay(day: CupDaySchedule, court: string): boolean {
+  return getCourtHallTime(day, court).enabled !== false;
+}
+
 export function getCourtHallTime(day: CupDaySchedule, court: string): CourtHallTime {
   const found = day.courtTimes?.find((c) => c.court === court);
-  if (found) return found;
+  if (found) {
+    return {
+      ...found,
+      enabled: found.enabled !== false,
+    };
+  }
+  const inLegacyCourts = day.timeFrom && day.timeTo;
   return {
     court,
     timeFrom: day.timeFrom ?? '09:00',
     timeTo: day.timeTo ?? '17:00',
+    enabled: inLegacyCourts ? true : false,
   };
 }
 
-export function syncDayCourtTimes(
-  day: CupDaySchedule,
-  courts: string[]
-): CupDaySchedule {
+/** Én rad per kjent bane – brukes i tilgjengelighetsmatrisen. */
+export function syncDayCourtTimes(day: CupDaySchedule): CupDaySchedule {
   const existing = day.courtTimes ?? [];
-  const courtTimes = courts.map((court) => {
+  const courtTimes = AVAILABLE_COURTS.map((court) => {
     const prev = existing.find((c) => c.court === court);
-    return (
-      prev ?? {
-        court,
-        timeFrom: day.timeFrom ?? '09:00',
-        timeTo: day.timeTo ?? '17:00',
-      }
-    );
+    if (prev) {
+      return {
+        ...prev,
+        enabled: prev.enabled !== false,
+      };
+    }
+    return {
+      court,
+      timeFrom: day.timeFrom ?? '09:00',
+      timeTo: day.timeTo ?? '17:00',
+      enabled: false,
+    };
   });
   return { ...day, courtTimes };
 }
 
-export function syncAllDaysCourtTimes(
-  days: CupDaySchedule[],
-  courts: string[]
-): CupDaySchedule[] {
-  return days.map((d) => syncDayCourtTimes(d, courts));
+export function syncAllDaysCourtTimes(days: CupDaySchedule[]): CupDaySchedule[] {
+  return days.map((d) => syncDayCourtTimes(d));
+}
+
+export function getActiveCourtNames(days: CupDaySchedule[]): string[] {
+  const names = new Set<string>();
+  for (const day of days) {
+    for (const court of AVAILABLE_COURTS) {
+      if (isCourtEnabledOnDay(day, court)) names.add(court);
+    }
+  }
+  return [...names];
 }
 
 export function buildDays(
@@ -99,18 +120,36 @@ export function buildDays(
   const timeFrom = anchor?.timeFrom ?? '09:00';
   const timeTo = anchor?.timeTo ?? '17:00';
 
-  return Array.from({ length: cupDays }, (_, i) => ({
-    date: addDays(baseDate, i),
-    timeFrom,
-    timeTo,
-    courtTimes: [],
-  }));
+  return syncAllDaysCourtTimes(
+    Array.from({ length: cupDays }, (_, i) => ({
+      date: addDays(baseDate, i),
+      timeFrom,
+      timeTo,
+      courtTimes: AVAILABLE_COURTS.map((court, idx) => ({
+        court,
+        timeFrom,
+        timeTo,
+        enabled: idx < 1,
+      })),
+    }))
+  );
 }
 
-function normalizeDay(day: CupDaySchedule, courts: string[]): CupDaySchedule {
+function normalizeDay(day: CupDaySchedule): CupDaySchedule {
   const timeFrom = day.timeFrom ?? '09:00';
   const timeTo = day.timeTo ?? '17:00';
-  return syncDayCourtTimes({ ...day, timeFrom, timeTo }, courts);
+  let synced = syncDayCourtTimes({ ...day, timeFrom, timeTo });
+
+  if (synced.courtTimes?.every((c) => c.enabled === false)) {
+    synced = {
+      ...synced,
+      courtTimes: synced.courtTimes?.map((c, i) => ({
+        ...c,
+        enabled: i < 1,
+      })),
+    };
+  }
+  return synced;
 }
 
 /** Støtt gamle lagrede parametere (enkelt startdato/tid). */
@@ -149,12 +188,23 @@ export function normalizeScheduleParams(
   }
 
   const courtCount = asCourtCount(parsed.courtCount);
-  let courts = parsed.courts?.length ? parsed.courts : defaultCourts(courtCount);
-  if (courts.length !== courtCount) {
-    courts = defaultCourts(courtCount);
+  const legacyCourts = parsed.courts?.length ? parsed.courts : [];
+  let normalizedDays = trimmedDays.map((d) => normalizeDay(d));
+
+  if (legacyCourts.length > 0) {
+    normalizedDays = normalizedDays.map((d) => ({
+      ...d,
+      courtTimes: d.courtTimes?.map((c) => ({
+        ...c,
+        enabled: c.enabled !== false || legacyCourts.includes(c.court),
+      })),
+    }));
   }
 
-  const normalizedDays = trimmedDays.map((d) => normalizeDay(d, courts));
+  let courts = getActiveCourtNames(normalizedDays);
+  if (courts.length === 0) {
+    courts = defaultCourts(courtCount);
+  }
 
   return {
     matchFormat: parsed.matchFormat ?? DEFAULT_SCHEDULE_PARAMS.matchFormat,

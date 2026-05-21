@@ -1,6 +1,47 @@
 import type { Group, Match, MatchPhase, Team } from '../types';
 import { bestThirdPlaces, groupLabel, rankInGroup } from './standings';
 
+/** Sluttspill spilles alltid på denne hallen. */
+export const PLAYOFF_COURT = 'Høyenhallen';
+
+export function isPlayoffPhase(phase?: MatchPhase): boolean {
+  return phase === 'crossover' || phase === 'quarterfinal';
+}
+
+/** Etikett: Nr 3 i gruppe A vs Nr 3 i gruppe B */
+export function playoffMatchLabel(
+  homeRank: number,
+  homeGroupId: string,
+  awayRank: number,
+  awayGroupId: string
+): string {
+  return `Nr ${homeRank} i gruppe ${homeGroupId} vs Nr ${awayRank} i gruppe ${awayGroupId}`;
+}
+
+export function parsePlayoffLabel(
+  label: string
+): { home: TeamSlot; away: TeamSlot; thirdPlaces?: [number, number] } | null {
+  const standard = label.match(
+    /Nr\s*(\d+)\s+i\s+gruppe\s*([A-C])\s+vs\s+Nr\s*(\d+)\s+i\s+gruppe\s*([A-C])/i
+  );
+  if (standard) {
+    return {
+      home: { groupId: standard[2].toUpperCase(), rank: Number(standard[1]) },
+      away: { groupId: standard[4].toUpperCase(), rank: Number(standard[3]) },
+    };
+  }
+
+  if (/beste\s+3/i.test(label)) {
+    return {
+      home: { groupId: 'A', rank: 3 },
+      away: { groupId: 'B', rank: 3 },
+      thirdPlaces: [0, 1],
+    };
+  }
+
+  return null;
+}
+
 export interface ScheduledPairing {
   home: string;
   away: string;
@@ -95,21 +136,22 @@ export function describePlayoffRules(layout: GroupLayout): string {
   if (groupCount === 2) {
     const n = Math.min(...sizes);
     return (
-      `Etter gruppespill: ${n} krysskamper — ` +
-      `1. plass A vs 1. plass B, 2. vs 2., osv. (lik plassering møtes).`
+      `Etter gruppespill: ${n} finale(r) — lik plassering møtes ` +
+      `(Nr 1 i gruppe A vs Nr 1 i B, Nr 2 vs Nr 2, osv.). Alle lag får én ekstra kamp. ` +
+      `Sluttspill kun i ${PLAYOFF_COURT}.`
     );
   }
 
   if (sizes.every((s) => s >= 4)) {
     return (
-      'Etter gruppespill: topp 2 fra hver gruppe + 2 beste 3. plass → 8 lag. ' +
-      'Kvartfinaler: 1A–2B, 1C–2A, 1B–2C, og beste 3. plass mot beste 3. plass.'
+      'Etter gruppespill: kvartfinaler (topp 2 per gruppe + 2 beste 3. plass). ' +
+      `Sluttspill kun i ${PLAYOFF_COURT}.`
     );
   }
 
   return (
-    'Etter gruppespill: topp 2 fra hver gruppe (6 lag). ' +
-    'Sluttspill: 1A–2B, 1B–2C, 1C–2A (vinnergruppe mot andreplass i neste gruppe).'
+    'Etter gruppespill: krysskamper mellom gruppene (topp 2). ' +
+    `Sluttspill kun i ${PLAYOFF_COURT}.`
   );
 }
 
@@ -240,12 +282,15 @@ export function buildPlayoffSlots(groups: Group[], layout: GroupLayout): Playoff
 
   if (layout.groupCount === 2 && ga && gb) {
     const rounds = Math.min(sizes[0], sizes[1]);
-    return Array.from({ length: rounds }, (_, i) => ({
-      home: { groupId: ga.id, rank: i + 1 },
-      away: { groupId: gb.id, rank: i + 1 },
-      phase: 'crossover' as MatchPhase,
-      label: `Krysskamp ${i + 1}. plass (${ga.id} vs ${gb.id})`,
-    }));
+    return Array.from({ length: rounds }, (_, i) => {
+      const rank = i + 1;
+      return {
+        home: { groupId: ga.id, rank },
+        away: { groupId: gb.id, rank },
+        phase: 'crossover' as MatchPhase,
+        label: playoffMatchLabel(rank, ga.id, rank, gb.id),
+      };
+    });
   }
 
   if (layout.groupCount === 3 && ga && gb && gc) {
@@ -257,25 +302,25 @@ export function buildPlayoffSlots(groups: Group[], layout: GroupLayout): Playoff
           home: { groupId: 'A', rank: 1 },
           away: { groupId: 'B', rank: 2 },
           phase: 'quarterfinal',
-          label: 'Kvartfinale 1: 1A – 2B',
+          label: playoffMatchLabel(1, 'A', 2, 'B'),
         },
         {
           home: { groupId: 'C', rank: 1 },
           away: { groupId: 'A', rank: 2 },
           phase: 'quarterfinal',
-          label: 'Kvartfinale 2: 1C – 2A',
+          label: playoffMatchLabel(1, 'C', 2, 'A'),
         },
         {
           home: { groupId: 'B', rank: 1 },
           away: { groupId: 'C', rank: 2 },
           phase: 'quarterfinal',
-          label: 'Kvartfinale 3: 1B – 2C',
+          label: playoffMatchLabel(1, 'B', 2, 'C'),
         },
         {
           home: { groupId: 'A', rank: 3 },
           away: { groupId: 'B', rank: 3 },
           phase: 'quarterfinal',
-          label: 'Kvartfinale 4: beste 3. plass',
+          label: 'Nr 3 i gruppe A vs Nr 3 i gruppe B (beste 3. plass)',
           resolveThirdPlaces: [0, 1],
         },
       ];
@@ -286,19 +331,19 @@ export function buildPlayoffSlots(groups: Group[], layout: GroupLayout): Playoff
         home: { groupId: 'A', rank: 1 },
         away: { groupId: 'B', rank: 2 },
         phase: 'crossover',
-        label: 'Sluttspill 1: 1A – 2B',
+        label: playoffMatchLabel(1, 'A', 2, 'B'),
       },
       {
         home: { groupId: 'B', rank: 1 },
         away: { groupId: 'C', rank: 2 },
         phase: 'crossover',
-        label: 'Sluttspill 2: 1B – 2C',
+        label: playoffMatchLabel(1, 'B', 2, 'C'),
       },
       {
         home: { groupId: 'C', rank: 1 },
         away: { groupId: 'A', rank: 2 },
         phase: 'crossover',
-        label: 'Sluttspill 3: 1C – 2A',
+        label: playoffMatchLabel(1, 'C', 2, 'A'),
       },
     ];
   }
@@ -331,21 +376,13 @@ export function generateSeriesPairings(teams: Team[]): {
   return { groups, pairings, layout };
 }
 
-const PLAYOFF_LABEL_SPECS: Record<
-  string,
-  | { home: [string, number]; away: [string, number] }
-  | { thirdPlaces: [number, number] }
-> = {
-  'Kvartfinale 1: 1A – 2B': { home: ['A', 1], away: ['B', 2] },
-  'Kvartfinale 2: 1C – 2A': { home: ['C', 1], away: ['A', 2] },
-  'Kvartfinale 3: 1B – 2C': { home: ['B', 1], away: ['C', 2] },
-  'Sluttspill 1: 1A – 2B': { home: ['A', 1], away: ['B', 2] },
-  'Sluttspill 2: 1B – 2C': { home: ['B', 1], away: ['C', 2] },
-  'Sluttspill 3: 1C – 2A': { home: ['C', 1], away: ['A', 2] },
-  'Krysskamp 1A–2B': { home: ['A', 1], away: ['B', 2] },
-  'Krysskamp 1B–2C': { home: ['B', 1], away: ['C', 2] },
-  'Krysskamp 1C–2A': { home: ['C', 1], away: ['A', 2] },
-};
+export function countPlayoffPairings(teams: Team[]): number {
+  if (teams.length < 2) return 0;
+  const layout = computeGroupLayout(teams.length);
+  if (layout.groupCount <= 1) return 0;
+  const groups = assignTeamsToGroups(teams, layout);
+  return buildPlayoffSlots(groups, layout).length;
+}
 
 function resolveRankSlot(
   groups: Group[],
@@ -359,39 +396,34 @@ function resolveRankSlot(
   return rankInGroup(group, matches, teams, rank);
 }
 
-/** Oppdater sluttspillkamper ut fra faktisk tabell. */
+/** Oppdater sluttspillkamper ut fra faktisk tabell (etter gruppespill er ferdig). */
 export function refreshPlayoffTeams(
   groups: Group[],
   matches: Match[],
   teams: Team[]
 ): Match[] {
   return matches.map((m) => {
-    if (m.phase !== 'crossover' && m.phase !== 'quarterfinal') return m;
-    if (!m.label) return m;
+    if (!isPlayoffPhase(m.phase) || !m.label) return m;
 
-    const crossover2 = m.label.match(/Krysskamp (\d+)\. plass/);
-    if (crossover2 && groups.length === 2) {
-      const r = Number(crossover2[1]);
-      const home = resolveRankSlot(groups, matches, teams, groups[0].id, r);
-      const away = resolveRankSlot(groups, matches, teams, groups[1].id, r);
-      if (!home || !away) return m;
-      return { ...m, homeTeamId: home, awayTeamId: away };
-    }
+    const parsed = parsePlayoffLabel(m.label);
+    if (!parsed) return m;
 
-    if (m.label === 'Kvartfinale 4: beste 3. plass') {
+    if (parsed.thirdPlaces) {
       const thirds = bestThirdPlaces(groups, matches, teams, 2);
       if (thirds.length < 2) return m;
-      return { ...m, homeTeamId: thirds[0], awayTeamId: thirds[1] };
+      return { ...m, homeTeamId: thirds[0], awayTeamId: thirds[1], court: PLAYOFF_COURT };
     }
 
-    const spec = PLAYOFF_LABEL_SPECS[m.label];
-    if (spec && 'home' in spec) {
-      const home = resolveRankSlot(groups, matches, teams, spec.home[0], spec.home[1]);
-      const away = resolveRankSlot(groups, matches, teams, spec.away[0], spec.away[1]);
-      if (!home || !away) return m;
-      return { ...m, homeTeamId: home, awayTeamId: away };
-    }
-
-    return m;
+    const home = resolveRankSlot(groups, matches, teams, parsed.home.groupId, parsed.home.rank);
+    const away = resolveRankSlot(groups, matches, teams, parsed.away.groupId, parsed.away.rank);
+    if (!home || !away) return m;
+    return { ...m, homeTeamId: home, awayTeamId: away, court: PLAYOFF_COURT };
   });
+}
+
+/** Er alle gruppespillkamper ferdige (alle har resultat)? */
+export function isGroupStageComplete(groups: Group[], matches: Match[]): boolean {
+  const groupMatches = matches.filter((m) => m.phase === 'group');
+  if (groupMatches.length === 0) return false;
+  return groupMatches.every((m) => m.homeScore != null && m.awayScore != null);
 }

@@ -17,6 +17,8 @@ export interface CourtHallTime {
   court: string;
   timeFrom: string;
   timeTo: string;
+  /** Av = banen er ikke tilgjengelig denne dagen */
+  enabled?: boolean;
 }
 
 export interface CupDaySchedule {
