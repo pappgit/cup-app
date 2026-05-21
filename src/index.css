@@ -627,6 +627,14 @@ img {
   color: var(--white);
 }
 
+.match-card-number {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.92;
+}
+
 .match-card-time {
   font-size: 1.15rem;
   font-weight: 800;
