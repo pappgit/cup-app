@@ -1,4 +1,5 @@
 import type { Group, Match, MatchPhase, ScheduleParams, Team } from '../types';
+import { MATCH_NUMBER_START } from '../types';
 import {
   PLAYOFF_COURT,
   generateSeriesPairings,
@@ -690,6 +691,21 @@ function pairingToMatch(p: Pairing, startTime: string, court: string, round: num
   };
 }
 
+/** Nummerer kamper i tidsrekkefølge (f.eks. 111, 112, …). */
+export function assignMatchNumbers(
+  matches: Match[],
+  startAt: number = MATCH_NUMBER_START
+): Match[] {
+  const sorted = [...matches].sort(
+    (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+  );
+  const order = new Map(sorted.map((m, i) => [m.id, startAt + i]));
+  return matches.map((m) => ({
+    ...m,
+    matchNumber: order.get(m.id),
+  }));
+}
+
 function schedulePairingsOnSlots(
   pairings: Pairing[],
   slots: ScheduleSlot[],
@@ -968,12 +984,14 @@ export function generateScheduleWithMeta(
     };
   }
 
-  const { matches, unscheduled, backToBackTeamIds } = optimizeScheduleOrder(
+  let { matches, unscheduled, backToBackTeamIds } = optimizeScheduleOrder(
     pairings,
     allSlots,
     teams,
     params
   );
+
+  matches = assignMatchNumbers(matches);
 
   return {
     matches,

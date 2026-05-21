@@ -289,33 +289,22 @@ function resolveSlotWithFallback(
   return alt ?? group.teamIds[0];
 }
 
-/** Sluttspillkamper inkluderes alltid (med etikett), også før tabell er ferdig. */
+/** Sluttspillkamper inkluderes alltid (med etikett); lag settes etter gruppespill. */
 function slotsToPairings(
   slots: PlayoffSlot[],
   groups: Group[],
   order: Map<string, string[]>,
-  globalOrder: string[]
+  globalOrder: string[],
+  placeholderTeamId: string
 ): ScheduledPairing[] {
   return slots
-    .map((s) => {
-      const home = resolveSlotWithFallback(s.home, groups, order, globalOrder);
-      let away = resolveSlotWithFallback(s.away, groups, order, globalOrder, home);
-      if (!home || !away) return null;
-      if (home === away) {
-        const awayGroup = groups.find((g) => g.id === s.away.groupId);
-        away =
-          awayGroup?.teamIds.find((id) => id !== home) ??
-          awayGroup?.teamIds[0] ??
-          away;
-      }
-      return {
-        home,
-        away,
-        phase: s.phase,
-        label: s.label,
-      };
-    })
-    .filter((p): p is ScheduledPairing => p !== null);
+    .map((s) => ({
+      home: placeholderTeamId,
+      away: placeholderTeamId,
+      phase: s.phase,
+      label: s.label,
+    }))
+    .filter((p): p is ScheduledPairing => Boolean(p.home && p.away));
 }
 
 /** Sluttspillkamper ut fra gruppeoppsett (delegerer til playoffs-modulen). */
@@ -344,15 +333,15 @@ export function generateSeriesPairings(teams: Team[]): {
     pairings.push(...roundRobinPairings(group.id, group.teamIds));
   }
 
-  if (layout.groupCount > 1) {
-    const order = provisionalStandings(groups);
-    const globalOrder = provisionalGlobalOrder(groups);
+  if (layout.groupCount > 1 && teams.length > 0) {
+    const placeholderTeamId = teams[0].id;
     pairings.push(
       ...slotsToPairings(
         buildPlayoffSlots(groups, layout, teams.length),
         groups,
-        order,
-        globalOrder
+        provisionalStandings(groups),
+        provisionalGlobalOrder(groups),
+        placeholderTeamId
       )
     );
   }
@@ -398,6 +387,7 @@ export function applyPlayoffTeamUpdates(
   seriesPlay: boolean
 ): Match[] {
   if (!seriesPlay || groups.length === 0) return matches;
+  if (!isGroupStageComplete(groups, matches)) return matches;
   return refreshPlayoffTeams(groups, matches, teams);
 }
 

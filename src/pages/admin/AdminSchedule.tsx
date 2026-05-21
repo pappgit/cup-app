@@ -1,11 +1,10 @@
 import { useMemo, useState } from 'react';
 import { useCup } from '../../hooks/useCup';
-import { useCupMatches } from '../../hooks/useCupMatches';
+import { useCupMatchDisplay } from '../../hooks/useCupMatchDisplay';
 import type { CupDaySchedule, ScheduleParams } from '../../types';
 import { DEFAULT_SCHEDULE_PARAMS } from '../../types';
 import {
   PLAYOFF_COURT,
-  applyPlayoffTeamUpdates,
   computeGroupLayout,
   describeGroupPlan,
 } from '../../lib/groups';
@@ -27,7 +26,7 @@ import type { ScheduleEstimate } from '../../lib/scheduler';
 
 export function AdminSchedule() {
   const { cup, update } = useCup();
-  const cupMatches = useCupMatches();
+  const { matches: cupMatches } = useCupMatchDisplay();
   const params = useMemo(
     () => normalizeScheduleParams(cup.scheduleParams ?? DEFAULT_SCHEDULE_PARAMS),
     [cup.scheduleParams]
@@ -101,15 +100,8 @@ export function AdminSchedule() {
       return;
     }
 
-    const matches = applyPlayoffTeamUpdates(
-      result.matches,
-      cup.teams,
-      result.groups,
-      normalized.seriesPlay
-    );
-
     await update({
-      matches,
+      matches: result.matches,
       scheduleParams: {
         ...normalized,
         groups: result.groups.length > 0 ? result.groups : undefined,

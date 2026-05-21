@@ -27,6 +27,7 @@ async function persistMatches(
     start_time: m.startTime,
     court: m.court ?? null,
     round: m.round ?? null,
+    match_number: m.matchNumber ?? null,
     group_id: m.groupId ?? null,
     phase: m.phase ?? null,
     home_score: m.homeScore ?? null,
@@ -35,10 +36,21 @@ async function persistMatches(
   }));
 
   let { error } = await client.from('matches').insert(rows);
-  if (error?.message?.includes('court') || error?.message?.includes('group_id')) {
+  if (
+    error?.message?.includes('court') ||
+    error?.message?.includes('group_id') ||
+    error?.message?.includes('match_number')
+  ) {
     const basic = rows.map(
-      ({ group_id: _g, phase: _p, home_score: _hs, away_score: _as, match_label: _l, ...rest }) =>
-        rest
+      ({
+        group_id: _g,
+        phase: _p,
+        home_score: _hs,
+        away_score: _as,
+        match_label: _l,
+        match_number: _mn,
+        ...rest
+      }) => rest
     );
     ({ error } = await client.from('matches').insert(basic));
   }
@@ -109,7 +121,7 @@ export async function fetchCup(): Promise<CupData & { cupId: string }> {
   }
 
   const matchSelectFull =
-    'id, home_team_id, away_team_id, start_time, round, court, group_id, phase, home_score, away_score, match_label';
+    'id, home_team_id, away_team_id, start_time, round, match_number, court, group_id, phase, home_score, away_score, match_label';
   const matchSelectBasic = 'id, home_team_id, away_team_id, start_time, round, court';
   const matchSelectLegacy = 'id, home_team_id, away_team_id, start_time, round';
 
@@ -153,6 +165,7 @@ export async function fetchCup(): Promise<CupData & { cupId: string }> {
       startTime: m.start_time,
       court: m.court ?? undefined,
       round: m.round ?? undefined,
+      matchNumber: m.match_number ?? undefined,
       groupId: m.group_id ?? undefined,
       phase: m.phase ?? undefined,
       homeScore: m.home_score ?? null,

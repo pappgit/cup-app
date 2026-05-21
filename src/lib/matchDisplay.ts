@@ -1,3 +1,6 @@
+import type { Match } from '../types';
+import { isPlayoffPhase } from './groups';
+
 export interface MatchDisplayParts {
   dateKey: string;
   dateLabel: string;
@@ -28,6 +31,46 @@ export function getMatchDisplayParts(iso: string, court?: string): MatchDisplayP
     }),
     time: d.toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit' }),
     court: court ?? null,
+  };
+}
+
+/** Visningsnavn for sluttspill før gruppespill er ferdig. */
+export function playoffLabelBeforeGroupEnd(label: string): string {
+  if (label.startsWith('Semifinale')) return 'Semifinale';
+  if (label.startsWith('Plassering')) {
+    const tier = label.split(':')[0]?.trim();
+    return tier || 'Plassering';
+  }
+  if (label.startsWith('Kvartfinale')) return 'Kvartfinale';
+  if (label.includes('gruppe')) return 'Sluttspill';
+  return 'Sluttspill';
+}
+
+export function getMatchLabelForDisplay(
+  match: Match,
+  groupStageComplete: boolean
+): string | undefined {
+  if (!match.label) return undefined;
+  if (isPlayoffPhase(match.phase) && !groupStageComplete) {
+    return playoffLabelBeforeGroupEnd(match.label);
+  }
+  return match.label;
+}
+
+export function getMatchTeamNamesForDisplay(
+  match: Match,
+  teamName: (id: string) => string,
+  groupStageComplete: boolean
+): { homeName: string; awayName: string } {
+  if (isPlayoffPhase(match.phase) && !groupStageComplete) {
+    return {
+      homeName: 'Lag kunngjøres etter gruppespill',
+      awayName: 'Lag kunngjøres etter gruppespill',
+    };
+  }
+  return {
+    homeName: teamName(match.homeTeamId),
+    awayName: teamName(match.awayTeamId),
   };
 }
 

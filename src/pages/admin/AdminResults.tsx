@@ -5,7 +5,7 @@ import {
   applyPlayoffTeamUpdates,
   resolveGroupsForCup,
 } from '../../lib/groups';
-import { useCupMatches } from '../../hooks/useCupMatches';
+import { useCupMatchDisplay } from '../../hooks/useCupMatchDisplay';
 import { normalizeScheduleParams } from '../../lib/scheduleParams';
 import { DEFAULT_SCHEDULE_PARAMS, type Match } from '../../types';
 
@@ -60,13 +60,16 @@ function ScoreInputs({
 
 function ResultRow({
   match,
-  teamName,
+  getTeamNames,
+  getLabel,
   onSave,
 }: {
   match: Match;
-  teamName: (id: string) => string;
+  getTeamNames: (m: Match) => { homeName: string; awayName: string };
+  getLabel: (m: Match) => string | undefined;
   onSave: (id: string, h: string, a: string) => void;
 }) {
+  const names = getTeamNames(match);
   const displayMatch =
     match.groupId && !match.label
       ? { ...match, label: `Gruppe ${match.groupId}` }
@@ -76,8 +79,9 @@ function ResultRow({
     <div className="result-row">
       <MatchCard
         match={displayMatch}
-        homeName={teamName(match.homeTeamId)}
-        awayName={teamName(match.awayTeamId)}
+        homeName={names.homeName}
+        awayName={names.awayName}
+        displayLabel={getLabel(match) ?? (match.groupId ? `Gruppe ${match.groupId}` : undefined)}
         compact
       />
       <ScoreInputs
@@ -92,10 +96,14 @@ function ResultRow({
 
 export function AdminResults() {
   const { cup, update } = useCup();
-  const cupMatches = useCupMatches();
+  const {
+    matches: cupMatches,
+    getTeamNames,
+    getLabel,
+    groupStageComplete,
+  } = useCupMatchDisplay();
   const params = normalizeScheduleParams(cup.scheduleParams ?? DEFAULT_SCHEDULE_PARAMS);
   const groups = resolveGroupsForCup(cup.teams, params);
-  const teamName = (id: string) => cup.teams.find((t) => t.id === id)?.name ?? '?';
 
   const saveScore = async (matchId: string, homeRaw: string, awayRaw: string) => {
     const homeScore = homeRaw === '' ? null : Math.max(0, Number(homeRaw));
@@ -129,8 +137,8 @@ export function AdminResults() {
           Resultater
         </h2>
         <p className="page-subtitle">
-          Legg inn mål for hjemme- og bortelag. Sluttspill i kamprogrammet oppdateres automatisk
-          når resultater og tabell endres.
+          Legg inn mål for hjemme- og bortelag. Sluttspill-lag vises når alle gruppespillkamper har
+          resultat{groupStageComplete ? ' (klar)' : ''}.
         </p>
       </header>
 
@@ -138,7 +146,7 @@ export function AdminResults() {
         <div className="card" style={{ marginBottom: '1.25rem' }}>
           <h3>Gruppespill</h3>
           {groupMatches.map((m) => (
-            <ResultRow key={m.id} match={m} teamName={teamName} onSave={saveScore} />
+            <ResultRow key={m.id} match={m} getTeamNames={getTeamNames} getLabel={getLabel} onSave={saveScore} />
           ))}
         </div>
       )}
@@ -147,7 +155,7 @@ export function AdminResults() {
         <div className="card" style={{ marginBottom: '1.25rem' }}>
           <h3>Sluttspill</h3>
           {playoffMatches.map((m) => (
-            <ResultRow key={m.id} match={m} teamName={teamName} onSave={saveScore} />
+            <ResultRow key={m.id} match={m} getTeamNames={getTeamNames} getLabel={getLabel} onSave={saveScore} />
           ))}
         </div>
       )}
@@ -156,7 +164,7 @@ export function AdminResults() {
         <div className="card">
           <h3>Kamper</h3>
           {friendlyMatches.map((m) => (
-            <ResultRow key={m.id} match={m} teamName={teamName} onSave={saveScore} />
+            <ResultRow key={m.id} match={m} getTeamNames={getTeamNames} getLabel={getLabel} onSave={saveScore} />
           ))}
         </div>
       )}

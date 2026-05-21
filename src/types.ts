@@ -57,6 +57,8 @@ export interface Match {
   awayTeamId: string;
   startTime: string;
   court?: string;
+  /** Kampnummer i programmet (starter typisk på 111). */
+  matchNumber?: number;
   round?: number;
   groupId?: string;
   phase?: MatchPhase;
@@ -64,6 +66,9 @@ export interface Match {
   awayScore?: number | null;
   label?: string;
 }
+
+/** Første kampnummer ved generering av kamprogram. */
+export const MATCH_NUMBER_START = 111;
 
 export interface StandingRow {
   teamId: string;
