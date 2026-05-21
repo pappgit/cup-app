@@ -57,7 +57,7 @@ export function defaultCourts(count: CourtCount): string[] {
 }
 
 export function isCourtEnabledOnDay(day: CupDaySchedule, court: string): boolean {
-  return getCourtHallTime(day, court).enabled !== false;
+  return getCourtHallTime(day, court).enabled === true;
 }
 
 export function getCourtHallTime(day: CupDaySchedule, court: string): CourtHallTime {
@@ -65,15 +65,15 @@ export function getCourtHallTime(day: CupDaySchedule, court: string): CourtHallT
   if (found) {
     return {
       ...found,
-      enabled: found.enabled !== false,
+      enabled: found.enabled === true,
     };
   }
-  const inLegacyCourts = day.timeFrom && day.timeTo;
+  const hasMatrix = (day.courtTimes?.length ?? 0) > 0;
   return {
     court,
     timeFrom: day.timeFrom ?? '09:00',
     timeTo: day.timeTo ?? '17:00',
-    enabled: inLegacyCourts ? true : false,
+    enabled: hasMatrix ? false : Boolean(day.timeFrom && day.timeTo),
   };
 }
 
@@ -85,7 +85,7 @@ export function syncDayCourtTimes(day: CupDaySchedule): CupDaySchedule {
     if (prev) {
       return {
         ...prev,
-        enabled: prev.enabled !== false,
+        enabled: prev.enabled === true,
       };
     }
     return {
@@ -140,15 +140,6 @@ function normalizeDay(day: CupDaySchedule): CupDaySchedule {
   const timeTo = day.timeTo ?? '17:00';
   let synced = syncDayCourtTimes({ ...day, timeFrom, timeTo });
 
-  if (synced.courtTimes?.every((c) => c.enabled === false)) {
-    synced = {
-      ...synced,
-      courtTimes: synced.courtTimes?.map((c, i) => ({
-        ...c,
-        enabled: i < 1,
-      })),
-    };
-  }
   return synced;
 }
 
@@ -191,12 +182,15 @@ export function normalizeScheduleParams(
   const legacyCourts = parsed.courts?.length ? parsed.courts : [];
   let normalizedDays = trimmedDays.map((d) => normalizeDay(d));
 
-  if (legacyCourts.length > 0) {
+  const needsLegacyCourts = normalizedDays.every(
+    (d) => !d.courtTimes?.length || d.courtTimes.every((c) => c.enabled !== true)
+  );
+  if (legacyCourts.length > 0 && needsLegacyCourts) {
     normalizedDays = normalizedDays.map((d) => ({
       ...d,
       courtTimes: d.courtTimes?.map((c) => ({
         ...c,
-        enabled: c.enabled !== false || legacyCourts.includes(c.court),
+        enabled: legacyCourts.includes(c.court),
       })),
     }));
   }

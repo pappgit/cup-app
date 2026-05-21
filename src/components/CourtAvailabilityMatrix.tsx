@@ -29,17 +29,18 @@ export function CourtAvailabilityMatrix({
   ) => {
     const day = params.days[dayIndex];
     const hall = getCourtHallTime(day, court);
-    const courtTimes = (day.courtTimes ?? []).map((c) =>
-      c.court === court
-        ? { ...c, ...patch, enabled: patch.enabled ?? c.enabled !== false }
-        : c
-    );
+    const courtTimes = (day.courtTimes ?? []).map((c) => {
+      if (c.court !== court) return c;
+      const enabled =
+        patch.enabled !== undefined ? patch.enabled : c.enabled === true;
+      return { ...c, ...patch, enabled };
+    });
     if (!courtTimes.some((c) => c.court === court)) {
       courtTimes.push({
         court,
         timeFrom: hall.timeFrom,
         timeTo: hall.timeTo,
-        enabled: patch.enabled ?? true,
+        enabled: patch.enabled === true,
         ...patch,
       });
     }
@@ -94,7 +95,7 @@ export function CourtAvailabilityMatrix({
                 <th className="court-matrix-sticky court-matrix-court-name">{court}</th>
                 {params.days.map((day, dayIndex) => {
                   const hall = getCourtHallTime(day, court);
-                  const on = hall.enabled !== false;
+                  const on = hall.enabled === true;
                   return (
                     <td
                       key={`${dayIndex}-${court}`}
