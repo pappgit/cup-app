@@ -74,10 +74,52 @@ export interface ShopItem {
   available: boolean;
 }
 
+export type SponsorPlacement = 'forside' | 'meny' | 'kiosk';
+
 export interface Sponsor {
   id: string;
   name: string;
   logoUrl: string;
+  placement: SponsorPlacement;
+  slogan?: string;
+}
+
+export interface NavItemConfig {
+  path: string;
+  label: string;
+  icon: string;
+  adminOnly?: boolean;
+}
+
+export interface AppTheme {
+  purple: string;
+  purpleDark: string;
+  purpleLight: string;
+  yellow: string;
+  yellowDark: string;
+}
+
+export const DEFAULT_THEME: AppTheme = {
+  purple: '#503688',
+  purpleDark: '#3d2a66',
+  purpleLight: '#6d4fa8',
+  yellow: '#f9dc00',
+  yellowDark: '#e6c800',
+};
+
+export const DEFAULT_NAV_ITEMS: NavItemConfig[] = [
+  { path: '/', label: 'Forside', icon: '⌂' },
+  { path: '/kamper', label: 'Kamper', icon: '⚽' },
+  { path: '/tabell', label: 'Tabell', icon: '📊' },
+  { path: '/kiosk', label: 'Kiosk', icon: '🛒' },
+  { path: '/admin', label: 'Admin', icon: '⚙' },
+];
+
+export interface PageContent {
+  heroSubtitle: string;
+  participantInfo: string;
+  navItems: NavItemConfig[];
+  theme: AppTheme;
 }
 
 export interface CupData {
@@ -85,10 +127,23 @@ export interface CupData {
   teamCount: number;
   teams: Team[];
   scheduleParams: ScheduleParams | null;
+  pageContent: PageContent;
   matches: Match[];
   shopItems: ShopItem[];
   sponsors: Sponsor[];
 }
+
+export const DEFAULT_PAGE_CONTENT: PageContent = {
+  heroSubtitle: 'Velg ditt lag under – da vises riktige kamper og tabell i hele appen.',
+  participantInfo:
+    'Velkommen som deltaker på Tunet Cup!\n\n' +
+    '• Møt opp i god tid før kamp\n' +
+    '• Husk hvit trøye og lue\n' +
+    '• Kamper og resultater finner du under «Kamper» og «Tabell»\n\n' +
+    'Lykke til!',
+  navItems: DEFAULT_NAV_ITEMS,
+  theme: DEFAULT_THEME,
+};
 
 const today = new Date().toISOString().slice(0, 10);
 
@@ -109,6 +164,7 @@ export const DEFAULT_CUP: CupData = {
   teamCount: 4,
   teams: [],
   scheduleParams: null,
+  pageContent: DEFAULT_PAGE_CONTENT,
   matches: [],
   shopItems: [],
   sponsors: [],

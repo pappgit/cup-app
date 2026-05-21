@@ -9,6 +9,8 @@ interface ScheduleTeamFilterProps {
   value: string;
   onChange: (teamId: string) => void;
   showResetButton?: boolean;
+  label?: string;
+  allOptionLabel?: string;
   id?: string;
 }
 
@@ -17,6 +19,8 @@ export function ScheduleTeamFilter({
   value,
   onChange,
   showResetButton = true,
+  label = 'Vis kamper',
+  allOptionLabel = 'Hele kamprogrammet',
   id = 'schedule-team-filter',
 }: ScheduleTeamFilterProps) {
   const handleChange = (teamId: string) => {
@@ -27,9 +31,9 @@ export function ScheduleTeamFilter({
   return (
     <div className="schedule-toolbar">
       <div className="form-group schedule-toolbar-select">
-        <label htmlFor={id}>Vis kamper</label>
+        <label htmlFor={id}>{label}</label>
         <select id={id} value={value} onChange={(e) => handleChange(e.target.value)}>
-          <option value={SCHEDULE_VIEW_ALL}>Hele kamprogrammet</option>
+          <option value={SCHEDULE_VIEW_ALL}>{allOptionLabel}</option>
           {teams.map((t) => (
             <option key={t.id} value={t.id}>
               {t.name}

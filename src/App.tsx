@@ -16,7 +16,9 @@ import { AdminSchedule } from './pages/admin/AdminSchedule';
 import { AdminResults } from './pages/admin/AdminResults';
 import { AdminShop } from './pages/admin/AdminShop';
 import { AdminSponsors } from './pages/admin/AdminSponsors';
+import { AdminHomePage } from './pages/admin/AdminHomePage';
 import { AdminSettings } from './pages/admin/AdminSettings';
+import { AdminAppearance } from './pages/admin/AdminAppearance';
 
 export default function App() {
   const basename = import.meta.env.BASE_URL.replace(/\/$/, '') || undefined;
@@ -41,11 +43,13 @@ export default function App() {
               <Route path="kiosk" element={<ShopPage />} />
               <Route path="admin" element={<AdminLayout />}>
                 <Route index element={<AdminDashboard />} />
+                <Route path="forside" element={<AdminHomePage />} />
                 <Route path="lag" element={<AdminTeams />} />
                 <Route path="kamper" element={<AdminSchedule />} />
                 <Route path="resultater" element={<AdminResults />} />
                 <Route path="kiosk" element={<AdminShop />} />
                 <Route path="sponsorer" element={<AdminSponsors />} />
+                <Route path="utseende" element={<AdminAppearance />} />
                 <Route path="innstillinger" element={<AdminSettings />} />
               </Route>
             </Route>

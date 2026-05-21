@@ -24,11 +24,13 @@ export function AdminLayout() {
         <NavLink to="/admin" end>
           Oversikt
         </NavLink>
+        <NavLink to="/admin/forside">Forside</NavLink>
         <NavLink to="/admin/lag">Lag</NavLink>
         <NavLink to="/admin/kamper">Kamprogram</NavLink>
         <NavLink to="/admin/resultater">Resultater</NavLink>
         <NavLink to="/admin/kiosk">Kiosk</NavLink>
         <NavLink to="/admin/sponsorer">Sponsorer</NavLink>
+        <NavLink to="/admin/utseende">Utseende</NavLink>
         <NavLink to="/admin/innstillinger">Innstillinger</NavLink>
       </nav>
       <Outlet />

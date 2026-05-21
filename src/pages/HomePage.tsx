@@ -1,90 +1,49 @@
-import { useMemo, useState } from 'react';
-import { MatchList } from '../components/MatchList';
-import { SCHEDULE_VIEW_ALL, ScheduleTeamFilter } from '../components/ScheduleTeamFilter';
+import { Link } from 'react-router-dom';
+import { FeaturedSponsorFrame } from '../components/FeaturedSponsorFrame';
 import { useCup } from '../hooks/useCup';
-import { getFavoriteTeamId } from '../lib/storage';
-import { normalizeScheduleParams } from '../lib/scheduleParams';
-import { DEFAULT_SCHEDULE_PARAMS } from '../types';
-import { SponsorStrip } from '../components/SponsorStrip';
+import { normalizePageContent } from '../lib/pageContent';
+import { sponsorForPlacement } from '../lib/sponsors';
+import { DEFAULT_PAGE_CONTENT } from '../types';
 
 export function HomePage() {
   const { cup } = useCup();
-  const [viewFilter, setViewFilter] = useState(() => getFavoriteTeamId() ?? SCHEDULE_VIEW_ALL);
-
-  const params = normalizeScheduleParams(cup.scheduleParams ?? DEFAULT_SCHEDULE_PARAMS);
-  const teamName = (id: string) => cup.teams.find((t) => t.id === id)?.name ?? 'Ukjent lag';
-
-  const allMatches = useMemo(
-    () =>
-      [...cup.matches].sort(
-        (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
-      ),
-    [cup.matches]
-  );
-
-  const displayedMatches = useMemo(() => {
-    if (!viewFilter) return allMatches;
-    return allMatches.filter(
-      (m) => m.homeTeamId === viewFilter || m.awayTeamId === viewFilter
-    );
-  }, [allMatches, viewFilter]);
-
-  const hasResults = displayedMatches.some(
-    (m) => m.homeScore != null && m.awayScore != null
-  );
-
-  const scheduleTitle = viewFilter
-    ? `Kamper for ${teamName(viewFilter)}`
-    : 'Kamprogram';
+  const content = normalizePageContent(cup.pageContent ?? DEFAULT_PAGE_CONTENT);
+  const forsideSponsor = sponsorForPlacement(cup.sponsors, 'forside');
 
   return (
     <>
       <section className="hero">
         <h1>Velkommen til {cup.name}!</h1>
-        <p>Velg lag for å se bare deres kamper, eller hele kamprogrammet.</p>
+        {content.heroSubtitle && <p>{content.heroSubtitle}</p>}
       </section>
 
+      <FeaturedSponsorFrame sponsor={forsideSponsor} />
+
       <div className="card">
-        <h2>
-          {scheduleTitle}
-          {displayedMatches.length > 0 && (
-            <span className="match-count-badge">{displayedMatches.length}</span>
-          )}
-        </h2>
-
-        {cup.teams.length > 0 && (
-          <ScheduleTeamFilter
-            teams={cup.teams}
-            value={viewFilter}
-            onChange={setViewFilter}
-          />
-        )}
-
-        {params.seriesPlay && hasResults && (
-          <p className="schedule-results-hint">
-            Resultater vises under hver kamp når de er registrert i admin.
-          </p>
-        )}
-
-        {cup.matches.length === 0 ? (
-          <p className="empty-state" style={{ padding: '1rem 0' }}>
-            Kamprogrammet er ikke klart ennå. Kom tilbake snart!
-          </p>
-        ) : displayedMatches.length === 0 ? (
-          <p className="empty-state" style={{ padding: '1rem 0' }}>
-            Ingen kamper for {teamName(viewFilter)} ennå.
-          </p>
+        <h2>Info til deltakere</h2>
+        {content.participantInfo.trim() ? (
+          <div className="participant-info">{content.participantInfo}</div>
         ) : (
-          <MatchList
-            matches={displayedMatches}
-            teamName={teamName}
-            favoriteTeamId={viewFilter || null}
-            showDayHeaders
-          />
+          <p className="empty-state" style={{ padding: '1rem 0' }}>
+            Informasjon kommer snart.
+          </p>
         )}
       </div>
 
-      <SponsorStrip sponsors={cup.sponsors} />
+      <nav className="home-quick-links" aria-label="Snarveier">
+        <Link to="/kamper" className="home-quick-link">
+          <span className="home-quick-link-title">Kamper</span>
+          <span className="home-quick-link-desc">Kamprogram og resultater</span>
+        </Link>
+        <Link to="/tabell" className="home-quick-link">
+          <span className="home-quick-link-title">Tabell</span>
+          <span className="home-quick-link-desc">Gruppespill og poeng</span>
+        </Link>
+        <Link to="/kiosk" className="home-quick-link">
+          <span className="home-quick-link-title">Kiosk</span>
+          <span className="home-quick-link-desc">Mat og drikke</span>
+        </Link>
+      </nav>
     </>
   );
 }

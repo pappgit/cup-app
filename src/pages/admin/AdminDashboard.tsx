@@ -23,6 +23,9 @@ export function AdminDashboard() {
       <div className="card" style={{ gridColumn: '1 / -1' }}>
         <h2>Hurtigguide</h2>
         <ol style={{ margin: 0, paddingLeft: '1.25rem', lineHeight: 1.8 }}>
+          <li>Rediger velkomsttekst og deltakerinfo under Forside</li>
+          <li>Last opp sponsorlogoer med plassering under Sponsorer</li>
+          <li>Tilpass menyikoner og farger under Utseende</li>
           <li>Sett cupnavn og antall lag under Lag</li>
           <li>Legg inn alle lagnavn</li>
           <li>Konfigurer parametere og generer kamprogram under Kamprogram</li>

@@ -1,18 +1,17 @@
+import { sponsorsForPlacement } from '../lib/sponsors';
 import type { Sponsor } from '../types';
+import { SponsorLogo } from './SponsorLogo';
 
 export function SponsorStrip({ sponsors }: { sponsors: Sponsor[] }) {
-  if (sponsors.length === 0) return null;
+  const kiosk = sponsorsForPlacement(sponsors, 'kiosk');
+  if (kiosk.length === 0) return null;
 
   return (
     <section className="sponsor-strip" aria-label="Sponsorer">
-      {sponsors.map((s) => (
-        <img
-          key={s.id}
-          src={s.logoUrl}
-          alt={s.name}
-          className="sponsor-logo"
-          title={s.name}
-        />
+      {kiosk.map((s) => (
+        <div key={s.id} className="sponsor-logo-slot sponsor-logo-slot--strip">
+          <SponsorLogo src={s.logoUrl} alt={s.name} variant="strip" title={s.name} />
+        </div>
       ))}
     </section>
   );

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { ThemeApplier } from './ThemeApplier';
 import { useCup } from '../hooks/useCup';
 import { getSupabaseConfigStatus } from '../lib/supabase';
 
@@ -35,5 +36,10 @@ export function CupLoader({ children }: { children: ReactNode }) {
     );
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      <ThemeApplier />
+      {children}
+    </>
+  );
 }

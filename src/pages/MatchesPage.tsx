@@ -1,12 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { MatchList } from '../components/MatchList';
-import { SCHEDULE_VIEW_ALL, ScheduleTeamFilter } from '../components/ScheduleTeamFilter';
+import { ScheduleTeamFilter } from '../components/ScheduleTeamFilter';
 import { useCup } from '../hooks/useCup';
-import { getFavoriteTeamId } from '../lib/storage';
+import { useFavoriteTeam } from '../hooks/useFavoriteTeam';
 
 export function MatchesPage() {
   const { cup } = useCup();
-  const [viewFilter, setViewFilter] = useState(() => getFavoriteTeamId() ?? SCHEDULE_VIEW_ALL);
+  const { teamId: viewFilter, setFavorite: setViewFilter } = useFavoriteTeam();
 
   const teamName = (id: string) => cup.teams.find((t) => t.id === id)?.name ?? 'Ukjent lag';
 

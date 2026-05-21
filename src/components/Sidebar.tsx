@@ -1,22 +1,30 @@
 import { NavLink } from 'react-router-dom';
+import { normalizePageContent } from '../lib/pageContent';
+import { normalizeNavItems } from '../lib/navConfig';
+import { DEFAULT_PAGE_CONTENT } from '../types';
+import { SidebarSponsor } from './SidebarSponsor';
+import type { Sponsor } from '../types';
 
 interface SidebarProps {
   open: boolean;
   onClose: () => void;
   cupName: string;
   isAdmin?: boolean;
+  sponsors: Sponsor[];
+  pageContent?: typeof DEFAULT_PAGE_CONTENT;
 }
 
-const NAV = [
-  { to: '/', end: true, label: 'Forside', icon: '⌂' },
-  { to: '/kamper', label: 'Kamper', icon: '⚽' },
-  { to: '/tabell', label: 'Tabell', icon: '📊' },
-  { to: '/kiosk', label: 'Kiosk', icon: '🛒' },
-  { to: '/admin', label: 'Admin', icon: '⚙', adminOnly: false },
-] as const;
-
-export function Sidebar({ open, onClose, cupName, isAdmin }: SidebarProps) {
+export function Sidebar({
+  open,
+  onClose,
+  cupName,
+  isAdmin,
+  sponsors,
+  pageContent,
+}: SidebarProps) {
   const base = import.meta.env.BASE_URL;
+  const content = normalizePageContent(pageContent ?? DEFAULT_PAGE_CONTENT);
+  const navItems = normalizeNavItems(content.navItems);
 
   return (
     <>
@@ -34,13 +42,14 @@ export function Sidebar({ open, onClose, cupName, isAdmin }: SidebarProps) {
           </div>
         </div>
         <nav className="sidebar-nav">
-          {NAV.map((item) => {
-            const to = item.to === '/admin' ? (isAdmin ? '/admin' : '/admin/login') : item.to;
+          {navItems.map((item) => {
+            const to =
+              item.path === '/admin' ? (isAdmin ? '/admin' : '/admin/login') : item.path;
             return (
               <NavLink
-                key={item.to}
+                key={item.path}
                 to={to}
-                end={'end' in item ? item.end : false}
+                end={item.path === '/'}
                 onClick={onClose}
                 className="sidebar-link"
               >
@@ -52,6 +61,7 @@ export function Sidebar({ open, onClose, cupName, isAdmin }: SidebarProps) {
             );
           })}
         </nav>
+        <SidebarSponsor sponsors={sponsors} />
         <div className="sidebar-footer">Tunet Innebandyklubb</div>
       </aside>
     </>

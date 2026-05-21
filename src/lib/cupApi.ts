@@ -1,5 +1,7 @@
-import type { CupData, Match, ScheduleParams } from '../types';
+import type { CupData, Match, PageContent, ScheduleParams } from '../types';
 import { DEFAULT_CUP } from '../types';
+import { normalizePageContent } from './pageContent';
+import { normalizePlacement, normalizeSponsor } from './sponsors';
 import { getCupSlug, supabase } from './supabase';
 
 function isValidUuid(id: string): boolean {
@@ -76,7 +78,7 @@ export async function fetchCup(): Promise<CupData & { cupId: string }> {
 
   const { data: cupRow, error: cupError } = await client
     .from('cups')
-    .select('id, slug, name, team_count, schedule_params')
+    .select('id, slug, name, team_count, schedule_params, page_content')
     .eq('slug', slug)
     .maybeSingle();
 
@@ -87,11 +89,24 @@ export async function fetchCup(): Promise<CupData & { cupId: string }> {
 
   const cupId = cupRow.id;
 
-  const [teamsRes, shopRes, sponsorsRes] = await Promise.all([
+  const [teamsRes, shopRes] = await Promise.all([
     client.from('teams').select('id, name, sort_order').eq('cup_id', cupId).order('sort_order'),
     client.from('shop_items').select('id, name, price, description, available, sort_order').eq('cup_id', cupId).order('sort_order'),
-    client.from('sponsors').select('id, name, logo_url, sort_order').eq('cup_id', cupId).order('sort_order'),
   ]);
+
+  let sponsorsRes = await client
+    .from('sponsors')
+    .select('id, name, logo_url, placement, slogan, sort_order')
+    .eq('cup_id', cupId)
+    .order('sort_order');
+
+  if (sponsorsRes.error?.message?.includes('placement')) {
+    sponsorsRes = await client
+      .from('sponsors')
+      .select('id, name, logo_url, sort_order')
+      .eq('cup_id', cupId)
+      .order('sort_order');
+  }
 
   const matchSelectFull =
     'id, home_team_id, away_team_id, start_time, round, court, group_id, phase, home_score, away_score, match_label';
@@ -129,6 +144,7 @@ export async function fetchCup(): Promise<CupData & { cupId: string }> {
     name: cupRow.name,
     teamCount: cupRow.team_count,
     scheduleParams: cupRow.schedule_params as ScheduleParams | null,
+    pageContent: normalizePageContent(cupRow.page_content as PageContent | null),
     teams: (teamsRes.data ?? []).map((t) => ({ id: t.id, name: t.name })),
     matches: (matchesRes.data ?? []).map((m) => ({
       id: m.id,
@@ -150,11 +166,15 @@ export async function fetchCup(): Promise<CupData & { cupId: string }> {
       description: s.description ?? undefined,
       available: s.available,
     })),
-    sponsors: (sponsorsRes.data ?? []).map((s) => ({
-      id: s.id,
-      name: s.name,
-      logoUrl: s.logo_url,
-    })),
+    sponsors: (sponsorsRes.data ?? []).map((s) =>
+      normalizeSponsor({
+        id: s.id,
+        name: s.name,
+        logoUrl: s.logo_url,
+        placement: normalizePlacement(s.placement),
+        slogan: s.slogan ?? undefined,
+      })
+    ),
   };
 }
 
@@ -174,6 +194,7 @@ async function ensureCupId(client: ReturnType<typeof requireClient>, data: CupDa
         name: data.name,
         team_count: data.teamCount,
         schedule_params: data.scheduleParams,
+        page_content: data.pageContent,
         updated_at: new Date().toISOString(),
       })
       .eq('id', existing.id);
@@ -188,6 +209,7 @@ async function ensureCupId(client: ReturnType<typeof requireClient>, data: CupDa
       name: data.name,
       team_count: data.teamCount,
       schedule_params: data.scheduleParams,
+      page_content: data.pageContent,
     })
     .select('id')
     .single();
@@ -200,15 +222,29 @@ export async function persistCup(data: CupData, cupId?: string): Promise<string>
   const client = requireClient();
   const id = cupId || (await ensureCupId(client, data));
 
-  await client
+  let { error: updateError } = await client
     .from('cups')
     .update({
       name: data.name,
       team_count: data.teamCount,
       schedule_params: data.scheduleParams,
+      page_content: data.pageContent,
       updated_at: new Date().toISOString(),
     })
     .eq('id', id);
+
+  if (updateError?.message?.includes('page_content')) {
+    ({ error: updateError } = await client
+      .from('cups')
+      .update({
+        name: data.name,
+        team_count: data.teamCount,
+        schedule_params: data.scheduleParams,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id));
+  }
+  if (updateError) throw updateError;
 
   const teamIds = data.teams.map((t) => t.id);
   const shopIds = data.shopItems.map((s) => s.id);
@@ -262,16 +298,23 @@ export async function persistCup(data: CupData, cupId?: string): Promise<string>
 
   // Sponsors
   if (data.sponsors.length > 0) {
-    const { error } = await client.from('sponsors').upsert(
-      data.sponsors.map((s, i) => ({
-        id: s.id,
-        cup_id: id,
-        name: s.name,
-        logo_url: s.logoUrl,
-        sort_order: i,
-      })),
-      { onConflict: 'id' }
-    );
+    const rows = data.sponsors.map((s, i) => ({
+      id: s.id,
+      cup_id: id,
+      name: s.name,
+      logo_url: s.logoUrl,
+      placement: s.placement,
+      slogan: s.slogan ?? null,
+      sort_order: i,
+    }));
+
+    let { error } = await client.from('sponsors').upsert(rows, { onConflict: 'id' });
+    if (error?.message?.includes('placement')) {
+      ({ error } = await client.from('sponsors').upsert(
+        rows.map(({ placement: _p, slogan: _s, ...rest }) => rest),
+        { onConflict: 'id' }
+      ));
+    }
     if (error) throw error;
   }
   {
@@ -282,6 +325,21 @@ export async function persistCup(data: CupData, cupId?: string): Promise<string>
   }
 
   return id;
+}
+
+export async function uploadFeaturedSponsorLogo(cupId: string, file: File): Promise<string> {
+  const client = requireClient();
+  const ext = file.name.split('.').pop() || 'png';
+  const path = `${cupId}/featured.${ext}`;
+
+  const { error: uploadError } = await client.storage
+    .from('sponsors')
+    .upload(path, file, { upsert: true, contentType: file.type });
+
+  if (uploadError) throw uploadError;
+
+  const { data } = client.storage.from('sponsors').getPublicUrl(path);
+  return data.publicUrl;
 }
 
 export async function uploadSponsorLogo(
