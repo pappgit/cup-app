@@ -107,7 +107,10 @@ export interface Sponsor {
 export interface NavItemConfig {
   path: string;
   label: string;
+  /** Emoji eller symbol – brukes når iconUrl ikke er satt */
   icon: string;
+  /** Opplastet ikon (Supabase URL eller fil i public/) */
+  iconUrl?: string;
   adminOnly?: boolean;
 }
 

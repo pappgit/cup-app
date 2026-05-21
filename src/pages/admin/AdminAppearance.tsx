@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react';
+import { NavMenuIcon } from '../../components/NavMenuIcon';
+import { ClubLogo } from '../../components/ClubLogo';
 import { useCup } from '../../hooks/useCup';
-import { uploadSidebarLogo, persistCup } from '../../lib/cupApi';
+import { uploadNavIcon, uploadSidebarLogo, persistCup } from '../../lib/cupApi';
 import { getSidebarLogoUrl, normalizePageContent } from '../../lib/pageContent';
 import { normalizeNavItems } from '../../lib/navConfig';
 import { applyTheme, normalizeTheme } from '../../lib/theme';
@@ -10,7 +12,6 @@ import {
   DEFAULT_SIDEBAR_LOGO,
   DEFAULT_THEME,
 } from '../../types';
-import { ClubLogo } from '../../components/ClubLogo';
 import type { AppTheme, NavItemConfig, PageContent } from '../../types';
 
 export function AdminAppearance() {
@@ -20,6 +21,7 @@ export function AdminAppearance() {
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [msg, setMsg] = useState('');
   const [navDraft, setNavDraft] = useState<NavItemConfig[]>(content.navItems);
+  const [uploadingNavPath, setUploadingNavPath] = useState<string | null>(null);
   const [themeDraft, setThemeDraft] = useState<AppTheme>(content.theme);
 
   const save = async (patch: Partial<PageContent>) => {
@@ -39,6 +41,35 @@ export function AdminAppearance() {
   };
 
   const resetNav = () => setNavDraft([...DEFAULT_NAV_ITEMS]);
+
+  const handleNavIconUpload = async (path: string, file: File) => {
+    setUploadingNavPath(path);
+    setMsg('');
+    try {
+      const effectiveCupId = cupId || (await persistCup(cup));
+      const iconUrl = await uploadNavIcon(effectiveCupId, path, file);
+      const next = navDraft.map((item) =>
+        item.path === path ? { ...item, iconUrl } : item
+      );
+      setNavDraft(next);
+      await save({ navItems: normalizeNavItems(next) });
+      setMsg('Menyikon oppdatert!');
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : 'Opplasting feilet');
+    } finally {
+      setUploadingNavPath(null);
+    }
+  };
+
+  const clearNavIconImage = async (path: string) => {
+    const next = navDraft.map((item) =>
+      item.path === path ? { ...item, iconUrl: undefined } : item
+    );
+    setNavDraft(next);
+    await save({ navItems: normalizeNavItems(next) });
+    setMsg('Bildeikon fjernet – bruker emoji igjen.');
+    setTimeout(() => setMsg(''), 3000);
+  };
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -120,39 +151,32 @@ export function AdminAppearance() {
       <div className="card" style={{ marginBottom: '1.25rem' }}>
         <h2>Menyikoner</h2>
         <p style={{ fontSize: '0.85rem', color: 'var(--grey-600)', marginBottom: '1rem' }}>
-          Velg emoji eller kort symbol for hvert menypunkt i sidemenyen.
+          Last opp eget bilde per menypunkt, eller bruk emoji som reserve når ingen bilde er
+          lastet opp.
         </p>
         <div className="nav-icons-editor">
           {navDraft.map((item, i) => (
-            <div key={item.path} className="nav-icon-row">
-              <span className="nav-icon-preview" aria-hidden>
-                {item.icon || DEFAULT_NAV_ITEMS[i]?.icon}
-              </span>
-              <div className="nav-icon-fields">
-                <strong>{item.label}</strong>
-                <span className="nav-icon-path">{item.path}</span>
-              </div>
-              <input
-                type="text"
-                className="nav-icon-input"
-                maxLength={4}
-                value={item.icon}
-                onChange={(e) => {
-                  const next = [...navDraft];
-                  next[i] = { ...item, icon: e.target.value };
-                  setNavDraft(next);
-                }}
-                aria-label={`Ikon for ${item.label}`}
-              />
-            </div>
+            <NavIconEditorRow
+              key={item.path}
+              item={item}
+              fallbackIcon={DEFAULT_NAV_ITEMS[i]?.icon ?? ''}
+              uploading={uploadingNavPath === item.path}
+              onIconChange={(icon) => {
+                const next = [...navDraft];
+                next[i] = { ...item, icon };
+                setNavDraft(next);
+              }}
+              onUpload={(file) => handleNavIconUpload(item.path, file)}
+              onClearImage={() => clearNavIconImage(item.path)}
+            />
           ))}
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '1rem' }}>
           <button type="button" className="btn btn-primary" onClick={saveNav}>
-            Lagre ikoner
+            Lagre emoji
           </button>
           <button type="button" className="btn btn-outline btn-sm" onClick={resetNav}>
-            Tilbakestill ikoner
+            Tilbakestill alle ikoner
           </button>
         </div>
       </div>
@@ -211,6 +235,75 @@ export function AdminAppearance() {
         </div>
       </div>
     </>
+  );
+}
+
+function NavIconEditorRow({
+  item,
+  fallbackIcon,
+  uploading,
+  onIconChange,
+  onUpload,
+  onClearImage,
+}: {
+  item: NavItemConfig;
+  fallbackIcon: string;
+  uploading: boolean;
+  onIconChange: (icon: string) => void;
+  onUpload: (file: File) => void;
+  onClearImage: () => void;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const previewItem = { ...item, icon: item.icon || fallbackIcon };
+
+  return (
+    <div className="nav-icon-row">
+      <div className="nav-icon-preview">
+        <NavMenuIcon item={previewItem} className="nav-icon-preview-inner" />
+      </div>
+      <div className="nav-icon-fields">
+        <strong>{item.label}</strong>
+        <span className="nav-icon-path">{item.path}</span>
+      </div>
+      <div className="nav-icon-actions">
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          className="sr-only"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) onUpload(file);
+            e.target.value = '';
+          }}
+        />
+        <button
+          type="button"
+          className="btn btn-outline btn-sm"
+          disabled={uploading}
+          onClick={() => fileRef.current?.click()}
+        >
+          {uploading ? 'Laster …' : item.iconUrl ? 'Bytt bilde' : 'Last opp bilde'}
+        </button>
+        {item.iconUrl && (
+          <button type="button" className="btn btn-outline btn-sm" onClick={onClearImage}>
+            Fjern bilde
+          </button>
+        )}
+        <label className="nav-icon-emoji-label">
+          <span className="sr-only">Emoji for {item.label}</span>
+          <input
+            type="text"
+            className="nav-icon-input"
+            maxLength={4}
+            value={item.icon}
+            onChange={(e) => onIconChange(e.target.value)}
+            aria-label={`Emoji for ${item.label}`}
+            title="Brukes når ingen bilde er lastet opp"
+          />
+        </label>
+      </div>
+    </div>
   );
 }
 

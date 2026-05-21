@@ -3,6 +3,7 @@ import { normalizePageContent } from '../lib/pageContent';
 import { normalizeNavItems } from '../lib/navConfig';
 import { DEFAULT_PAGE_CONTENT } from '../types';
 import { ClubLogo } from './ClubLogo';
+import { NavMenuIcon } from './NavMenuIcon';
 import { SidebarSponsor } from './SidebarSponsor';
 import type { Sponsor } from '../types';
 
@@ -58,9 +59,7 @@ export function Sidebar({
                 onClick={onClose}
                 className="sidebar-link"
               >
-                <span className="sidebar-link-icon" aria-hidden>
-                  {item.icon}
-                </span>
+                <NavMenuIcon item={item} className="sidebar-link-icon" />
                 {item.label}
               </NavLink>
             );

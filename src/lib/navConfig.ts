@@ -9,10 +9,15 @@ export function normalizeNavItems(raw: NavItemConfig[] | null | undefined): NavI
   return DEFAULT_NAV_ITEMS.map((def) => {
     const found = raw.find((r) => r.path === def.path);
     if (!found) return { ...def };
+    const iconUrl =
+      typeof found.iconUrl === 'string' && found.iconUrl.trim()
+        ? found.iconUrl.trim()
+        : undefined;
     return {
       path: def.path,
       label: found.label?.trim() || def.label,
       icon: found.icon?.trim() || def.icon,
+      iconUrl,
       adminOnly: def.adminOnly,
     };
   });

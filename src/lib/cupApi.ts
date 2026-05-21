@@ -405,6 +405,26 @@ export async function uploadKioskImage(cupId: string, file: File): Promise<strin
   return data.publicUrl;
 }
 
+export async function uploadNavIcon(
+  cupId: string,
+  navPath: string,
+  file: File
+): Promise<string> {
+  const client = requireClient();
+  const ext = file.name.split('.').pop() || 'png';
+  const slug = navPath === '/' ? 'home' : navPath.replace(/^\//, '');
+  const path = `${cupId}/nav/${slug}.${ext}`;
+
+  const { error: uploadError } = await client.storage
+    .from('sponsors')
+    .upload(path, file, { upsert: true, contentType: file.type });
+
+  if (uploadError) throw uploadError;
+
+  const { data } = client.storage.from('sponsors').getPublicUrl(path);
+  return data.publicUrl;
+}
+
 export async function uploadSidebarLogo(cupId: string, file: File): Promise<string> {
   const client = requireClient();
   const ext = file.name.split('.').pop() || 'png';
