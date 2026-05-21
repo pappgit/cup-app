@@ -13,6 +13,12 @@ export function isPlayoffPhase(phase?: MatchPhase): boolean {
   return phase === 'crossover' || phase === 'quarterfinal';
 }
 
+/** Sluttspill – også når fase mangler i DB men etikett finnes. */
+export function isPlayoffMatch(match: Pick<Match, 'phase' | 'label'>): boolean {
+  if (isPlayoffPhase(match.phase)) return true;
+  return Boolean(match.label && parsePlayoffLabel(match.label));
+}
+
 /** Etikett: Nr 3 i gruppe A vs Nr 3 i gruppe B */
 export function playoffMatchLabel(
   homeRank: number,
@@ -387,6 +393,32 @@ export function applyPlayoffTeamUpdates(
   return refreshPlayoffTeams(groups, matches, teams);
 }
 
+/** Løs hjemme/borte for sluttspill ut fra tabell (null før gruppespill er ferdig). */
+export function getResolvedPlayoffTeamIds(
+  match: Match,
+  groups: Group[],
+  matches: Match[],
+  teams: Team[]
+): { home: string; away: string } | null {
+  if (!isPlayoffMatch(match) || !match.label) return null;
+  if (!isGroupStageComplete(groups, matches)) return null;
+
+  const parsed = parsePlayoffLabel(match.label);
+  if (!parsed) return null;
+
+  if (parsed.home.groupId === GLOBAL_GROUP_ID) {
+    const home = teamAtGlobalRank(groups, matches, teams, parsed.home.rank);
+    const away = teamAtGlobalRank(groups, matches, teams, parsed.away.rank);
+    if (!home || !away) return null;
+    return { home, away };
+  }
+
+  const home = resolveRankSlot(groups, matches, teams, parsed.home.groupId, parsed.home.rank);
+  const away = resolveRankSlot(groups, matches, teams, parsed.away.groupId, parsed.away.rank);
+  if (!home || !away) return null;
+  return { home, away };
+}
+
 /** Oppdater sluttspillkamper ut fra faktisk tabell (etter gruppespill er ferdig). */
 export function refreshPlayoffTeams(
   groups: Group[],
@@ -394,7 +426,7 @@ export function refreshPlayoffTeams(
   teams: Team[]
 ): Match[] {
   return matches.map((m) => {
-    if (!isPlayoffPhase(m.phase) || !m.label) return m;
+    if (!isPlayoffMatch(m) || !m.label) return m;
 
     const parsed = parsePlayoffLabel(m.label);
     if (!parsed) return m;

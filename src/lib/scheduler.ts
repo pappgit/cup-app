@@ -3,6 +3,7 @@ import { MATCH_NUMBER_START } from '../types';
 import {
   PLAYOFF_COURT,
   generateSeriesPairings,
+  isPlayoffMatch,
   isPlayoffPhase,
 } from './groups';
 import { AVAILABLE_COURTS } from '../types';
@@ -691,15 +692,26 @@ function pairingToMatch(p: Pairing, startTime: string, court: string, round: num
   };
 }
 
-/** Nummerer kamper i tidsrekkefølge (f.eks. 111, 112, …). */
+/** Gruppespill 1…n, sluttspill fra playoffStart (111). */
 export function assignMatchNumbers(
   matches: Match[],
-  startAt: number = MATCH_NUMBER_START
+  playoffStart: number = MATCH_NUMBER_START
 ): Match[] {
   const sorted = [...matches].sort(
     (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
   );
-  const order = new Map(sorted.map((m, i) => [m.id, startAt + i]));
+  const order = new Map<string, number>();
+  let groupNo = 1;
+  let playoffNo = playoffStart;
+
+  for (const m of sorted) {
+    if (isPlayoffMatch(m)) {
+      order.set(m.id, playoffNo++);
+    } else {
+      order.set(m.id, groupNo++);
+    }
+  }
+
   return matches.map((m) => ({
     ...m,
     matchNumber: order.get(m.id),

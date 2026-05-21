@@ -6,6 +6,7 @@ import {
 import {
   applyPlayoffTeamUpdates,
   isGroupStageComplete,
+  isPlayoffMatch,
   resolveGroupsForCup,
 } from '../lib/groups';
 import { normalizeScheduleParams } from '../lib/scheduleParams';
@@ -38,15 +39,17 @@ export function useCupMatchDisplay() {
   const teamName = (id: string) => cup.teams.find((t) => t.id === id)?.name ?? 'Ukjent lag';
 
   const getTeamNames = (match: Match) =>
-    getMatchTeamNamesForDisplay(match, teamName, groupStageComplete);
+    getMatchTeamNamesForDisplay(match, teamName, groups, cup.matches, cup.teams);
 
   const getLabel = (match: Match) => getMatchLabelForDisplay(match, groupStageComplete);
 
   return {
     matches,
+    groups,
     groupStageComplete,
     teamName,
     getTeamNames,
     getLabel,
+    isPlayoffMatch,
   };
 }

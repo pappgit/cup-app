@@ -1,5 +1,7 @@
 import type { Match } from '../types';
+import { getResolvedPlayoffTeamIds } from '../lib/groups';
 import { groupMatchesByDay } from '../lib/matchDisplay';
+import { useCup } from '../hooks/useCup';
 import { useCupMatchDisplay } from '../hooks/useCupMatchDisplay';
 import { MatchCard } from './MatchCard';
 
@@ -18,6 +20,7 @@ export function MatchList({
   emptyMessage = 'Ingen kamper å vise ennå.',
   showDayHeaders = true,
 }: MatchListProps) {
+  const { cup } = useCup();
   const display = useCupMatchDisplay();
   const teamName = teamNameProp ?? display.teamName;
   const getTeamNames = display.getTeamNames;
@@ -38,10 +41,17 @@ export function MatchList({
           <div className="match-cards">
             {day.items.map((m) => {
               const names = getTeamNames(m);
+              const resolved = getResolvedPlayoffTeamIds(
+                m,
+                display.groups,
+                cup.matches,
+                cup.teams
+              );
+              const homeId = resolved?.home ?? m.homeTeamId;
+              const awayId = resolved?.away ?? m.awayTeamId;
               const highlight =
                 !!favoriteTeamId &&
-                display.groupStageComplete &&
-                (m.homeTeamId === favoriteTeamId || m.awayTeamId === favoriteTeamId);
+                (homeId === favoriteTeamId || awayId === favoriteTeamId);
               return (
                 <MatchCard
                   key={m.id}

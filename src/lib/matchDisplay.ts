@@ -1,5 +1,9 @@
-import type { Match } from '../types';
-import { isPlayoffPhase } from './groups';
+import type { Group, Match, Team } from '../types';
+import {
+  getResolvedPlayoffTeamIds,
+  isPlayoffMatch,
+  isPlayoffPhase,
+} from './groups';
 
 export interface MatchDisplayParts {
   dateKey: string;
@@ -50,29 +54,41 @@ export function getMatchLabelForDisplay(
   match: Match,
   groupStageComplete: boolean
 ): string | undefined {
-  if (!match.label) return undefined;
-  if (isPlayoffPhase(match.phase) && !groupStageComplete) {
-    return playoffLabelBeforeGroupEnd(match.label);
+  if (isPlayoffMatch(match)) {
+    if (match.label) {
+      return groupStageComplete
+        ? match.label
+        : playoffLabelBeforeGroupEnd(match.label);
+    }
+    return 'Sluttspill';
   }
   return match.label;
 }
 
-const PLAYOFF_TBD = 'Lag kunngjøres etter gruppespill';
+export const PLAYOFF_TBD = 'Avklares etter gruppespill';
 
 export function getMatchTeamNamesForDisplay(
   match: Match,
   teamName: (id: string) => string,
-  groupStageComplete: boolean
+  groups: Group[],
+  matches: Match[],
+  teams: Team[]
 ): { homeName: string; awayName: string } {
-  if (
-    isPlayoffPhase(match.phase) &&
-    (!groupStageComplete || match.homeTeamId === match.awayTeamId)
-  ) {
-    return { homeName: PLAYOFF_TBD, awayName: PLAYOFF_TBD };
+  if (!isPlayoffMatch(match)) {
+    return {
+      homeName: teamName(match.homeTeamId),
+      awayName: teamName(match.awayTeamId),
+    };
   }
+
+  const resolved = getResolvedPlayoffTeamIds(match, groups, matches, teams);
+  if (!resolved) {
+    return { homeName: PLAYOFF_TBD, awayName: '' };
+  }
+
   return {
-    homeName: teamName(match.homeTeamId),
-    awayName: teamName(match.awayTeamId),
+    homeName: teamName(resolved.home),
+    awayName: teamName(resolved.away),
   };
 }
 

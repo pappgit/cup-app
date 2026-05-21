@@ -746,12 +746,57 @@ img {
   color: var(--purple-dark);
 }
 
+.match-card--playoff {
+  border-color: #e8c06a;
+  background: linear-gradient(135deg, #fffbf3 0%, #fff 55%);
+  box-shadow: var(--shadow-sm), inset 3px 0 0 #e8a838;
+}
+
 .match-card--playoff .match-card-rail {
-  background: linear-gradient(180deg, var(--purple-light) 0%, #7b5cb8 100%);
+  background: linear-gradient(180deg, #f0b429 0%, #c47f17 100%);
+  color: #3d2a00;
+}
+
+.match-card-playoff-badge {
+  display: block;
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.95;
+  margin-bottom: 0.2rem;
+}
+
+.match-card--playoff .match-card-number {
+  color: inherit;
+  opacity: 0.85;
+  font-size: 0.65rem;
+  font-weight: 800;
+}
+
+.match-card--playoff .match-card-label {
+  color: #9a6b00;
+  font-weight: 700;
+}
+
+.match-card-tbd {
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--grey-600);
+  font-style: italic;
+  text-align: center;
+  padding: 0.35rem 0;
+}
+
+.match-card--playoff.match-card--highlight {
+  border-color: var(--yellow);
+  box-shadow: var(--shadow-sm), 0 0 0 2px var(--yellow-glow), inset 3px 0 0 var(--yellow);
 }
 
 .match-card--playoff.match-card--highlight .match-card-rail {
   background: linear-gradient(180deg, var(--yellow) 0%, var(--yellow-dark) 100%);
+  color: var(--purple-dark);
 }
 
 .match-card--compact .match-card-main {
