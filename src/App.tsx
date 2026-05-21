@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AppErrorBoundary } from './components/AppErrorBoundary';
 import { AuthProvider } from './context/AuthContext';
 import { CupProvider } from './context/CupContext';
 import { Layout } from './components/Layout';
@@ -24,11 +25,12 @@ export default function App() {
   const basename = import.meta.env.BASE_URL.replace(/\/$/, '') || undefined;
 
   return (
-    <AuthProvider>
-      <CupProvider>
-        <BrowserRouter basename={basename}>
-          <SavingIndicator />
-          <Routes>
+    <AppErrorBoundary>
+      <AuthProvider>
+        <CupProvider>
+          <BrowserRouter basename={basename}>
+            <SavingIndicator />
+            <Routes>
             <Route path="/admin/login" element={<LoginPage />} />
             <Route
               element={
@@ -54,9 +56,10 @@ export default function App() {
               </Route>
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </BrowserRouter>
-      </CupProvider>
-    </AuthProvider>
+            </Routes>
+          </BrowserRouter>
+        </CupProvider>
+      </AuthProvider>
+    </AppErrorBoundary>
   );
 }

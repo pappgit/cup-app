@@ -101,65 +101,77 @@ export async function fetchCup(): Promise<CupData & { cupId: string }> {
 
   const cupId = cupRow.id;
 
-  const teamsRes = await client
-    .from('teams')
-    .select('id, name, sort_order')
-    .eq('cup_id', cupId)
-    .order('sort_order');
-
-  let shopRes = await client
-    .from('shop_items')
-    .select('id, name, price, description, image_url, available, sort_order')
-    .eq('cup_id', cupId)
-    .order('sort_order');
-
-  let sponsorsRes = await client
-    .from('sponsors')
-    .select('id, name, logo_url, placement, slogan, sort_order')
-    .eq('cup_id', cupId)
-    .order('sort_order');
-
-  if (sponsorsRes.error?.message?.includes('placement')) {
-    sponsorsRes = await client
-      .from('sponsors')
-      .select('id, name, logo_url, sort_order')
-      .eq('cup_id', cupId)
-      .order('sort_order');
-  }
-
   const matchSelectFull =
     'id, home_team_id, away_team_id, start_time, round, match_number, court, group_id, phase, home_score, away_score, match_label';
-  const matchSelectBasic = 'id, home_team_id, away_team_id, start_time, round, court';
+  const matchSelectBasic =
+    'id, home_team_id, away_team_id, start_time, round, court, group_id, phase, home_score, away_score, match_label';
   const matchSelectLegacy = 'id, home_team_id, away_team_id, start_time, round';
 
-  let matchesRes = await client
-    .from('matches')
-    .select(matchSelectFull)
-    .eq('cup_id', cupId)
-    .order('start_time');
-
-  if (matchesRes.error) {
-    matchesRes = await client
+  async function fetchMatches() {
+    let res = await client
       .from('matches')
-      .select(matchSelectBasic)
+      .select(matchSelectFull)
       .eq('cup_id', cupId)
       .order('start_time');
-  }
-  if (matchesRes.error?.message?.includes('court')) {
-    matchesRes = await client
-      .from('matches')
-      .select(matchSelectLegacy)
-      .eq('cup_id', cupId)
-      .order('start_time');
+    if (res.error) {
+      res = await client
+        .from('matches')
+        .select(matchSelectBasic)
+        .eq('cup_id', cupId)
+        .order('start_time');
+    }
+    if (res.error) {
+      res = await client
+        .from('matches')
+        .select(matchSelectLegacy)
+        .eq('cup_id', cupId)
+        .order('start_time');
+    }
+    return res;
   }
 
-  if (shopRes.error?.message?.includes('image_url')) {
-    shopRes = await client
+  async function fetchShop() {
+    let res = await client
       .from('shop_items')
-      .select('id, name, price, description, available, sort_order')
+      .select('id, name, price, description, image_url, available, sort_order')
       .eq('cup_id', cupId)
       .order('sort_order');
+    if (res.error?.message?.includes('image_url')) {
+      res = await client
+        .from('shop_items')
+        .select('id, name, price, description, available, sort_order')
+        .eq('cup_id', cupId)
+        .order('sort_order');
+    }
+    return res;
   }
+
+  async function fetchSponsors() {
+    let res = await client
+      .from('sponsors')
+      .select('id, name, logo_url, placement, slogan, sort_order')
+      .eq('cup_id', cupId)
+      .order('sort_order');
+    if (res.error?.message?.includes('placement')) {
+      res = await client
+        .from('sponsors')
+        .select('id, name, logo_url, sort_order')
+        .eq('cup_id', cupId)
+        .order('sort_order');
+    }
+    return res;
+  }
+
+  const [teamsRes, shopRes, sponsorsRes, matchesRes] = await Promise.all([
+    client
+      .from('teams')
+      .select('id, name, sort_order')
+      .eq('cup_id', cupId)
+      .order('sort_order'),
+    fetchShop(),
+    fetchSponsors(),
+    fetchMatches(),
+  ]);
 
   if (teamsRes.error) throw teamsRes.error;
   if (matchesRes.error) throw matchesRes.error;

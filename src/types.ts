@@ -4,10 +4,23 @@ export type MatchBreak = 5 | 10 | 15;
 export type GamesPerTeam = 2 | 3 | 4 | 5 | 6 | 7 | 8;
 /** Avledet fra days.length – beholdes for lagring i eldre data. */
 export type CupDays = number;
-export type CourtCount = 1 | 2 | 3;
-export type MatchPhase = 'group' | 'crossover' | 'quarterfinal' | 'friendly';
+export type CourtCount = 1 | 2 | 3 | 4 | 5 | 6;
+export type MatchPhase =
+  | 'group'
+  | 'crossover'
+  | 'quarterfinal'
+  | 'semifinal'
+  | 'final'
+  | 'friendly';
 
-export const AVAILABLE_COURTS = ['Høyenhallen', 'Bekkelaget', 'Brynseng'] as const;
+export const AVAILABLE_COURTS = [
+  'Høyenhallen',
+  'Bekkelaget',
+  'Brynseng',
+  'Oppsal Arena 1',
+  'Oppsal Arena 2',
+  'Oppsal Arena 3',
+] as const;
 
 export interface Team {
   id: string;

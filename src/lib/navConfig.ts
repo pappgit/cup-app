@@ -13,10 +13,14 @@ export function normalizeNavItems(raw: NavItemConfig[] | null | undefined): NavI
       typeof found.iconUrl === 'string' && found.iconUrl.trim()
         ? found.iconUrl.trim()
         : undefined;
+    const icon =
+      typeof found.icon === 'string' && found.icon.trim()
+        ? found.icon.trim()
+        : def.icon;
     return {
       path: def.path,
       label: found.label?.trim() || def.label,
-      icon: found.icon?.trim() || def.icon,
+      icon,
       iconUrl,
       adminOnly: def.adminOnly,
     };

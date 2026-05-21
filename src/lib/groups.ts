@@ -1,8 +1,14 @@
 import type { Group, Match, MatchPhase, ScheduleParams, Team } from '../types';
+import {
+  computeQualifiedSeeds,
+  teamIdForSeed,
+} from './advancement';
 import { generatePlayoffSlots } from './playoffs';
 import type { PlayoffSlot, TeamSlot } from './playoffs';
 import { GLOBAL_GROUP_ID, provisionalGlobalOrder, teamAtGlobalRank } from './ranking';
 import { groupLabel, rankInGroup } from './standings';
+import { getTournamentFormat } from './tournamentFormats';
+import type { TournamentFormat } from './tournamentFormats';
 
 export type { PlayoffSlot, TeamSlot } from './playoffs';
 
@@ -10,7 +16,12 @@ export type { PlayoffSlot, TeamSlot } from './playoffs';
 export const PLAYOFF_COURT = 'Høyenhallen';
 
 export function isPlayoffPhase(phase?: MatchPhase): boolean {
-  return phase === 'crossover' || phase === 'quarterfinal';
+  return (
+    phase === 'crossover' ||
+    phase === 'quarterfinal' ||
+    phase === 'semifinal' ||
+    phase === 'final'
+  );
 }
 
 /** Sluttspill – også når fase mangler i DB men etikett finnes. */
@@ -43,12 +54,20 @@ export function parsePlayoffLabel(
   }
 
   const standard = label.match(
-    /Nr\s*(\d+)\s+i\s+gruppe\s*([A-C])\s+vs\s+Nr\s*(\d+)\s+i\s+gruppe\s*([A-C])/i
+    /Nr\s*(\d+)\s+i\s+gruppe\s*([A-H])\s+vs\s+Nr\s*(\d+)\s+i\s+gruppe\s*([A-H])/i
   );
   if (standard) {
     return {
       home: { groupId: standard[2].toUpperCase(), rank: Number(standard[1]) },
       away: { groupId: standard[4].toUpperCase(), rank: Number(standard[3]) },
+    };
+  }
+
+  const seedMatch = label.match(/Seed\s*(\d+)\s+vs\s+Seed\s*(\d+)/i);
+  if (seedMatch) {
+    return {
+      home: { groupId: `SEED_${seedMatch[1]}`, rank: 1 },
+      away: { groupId: `SEED_${seedMatch[2]}`, rank: 1 },
     };
   }
 
@@ -67,52 +86,19 @@ export interface GroupLayout {
   sizes: number[];
   groupCount: number;
   label: string;
+  format: TournamentFormat;
 }
 
-function distributeGroupSizes(teamCount: number, groupCount: number): number[] {
-  const base = Math.floor(teamCount / groupCount);
-  const remainder = teamCount % groupCount;
-  return Array.from({ length: groupCount }, (_, i) => base + (i < remainder ? 1 : 0));
-}
-
-function pickGroupCount(teamCount: number): number {
-  if (teamCount < 4) return 1;
-  if (teamCount <= 6) return 2;
-  if (teamCount <= 15) return 3;
-  if (teamCount <= 20) return 4;
-  return Math.min(8, Math.ceil(teamCount / 4));
-}
-
-/** Gruppeoppsett – jevn fordeling av lag. */
+/** Gruppeoppsett – jevn fordeling av lag (4–25 lag). */
 export function computeGroupLayout(teamCount: number): GroupLayout {
-  const known: Record<number, number[]> = {
-    4: [4],
-    5: [3, 2],
-    6: [3, 3],
-    7: [4, 3],
-    8: [4, 4],
-    9: [3, 3, 3],
-    10: [5, 5],
-    11: [4, 4, 3],
-    12: [4, 4, 4],
+  const format = getTournamentFormat(teamCount);
+  const sizes = format.groupSizes;
+  return {
+    sizes,
+    groupCount: sizes.length,
+    label: formatLayoutLabel(sizes),
+    format,
   };
-
-  if (known[teamCount]) {
-    const sizes = known[teamCount];
-    return {
-      sizes,
-      groupCount: sizes.length,
-      label: formatLayoutLabel(sizes),
-    };
-  }
-
-  if (teamCount < 4) {
-    return { sizes: [teamCount], groupCount: 1, label: `1 gruppe (${teamCount} lag)` };
-  }
-
-  const groupCount = pickGroupCount(teamCount);
-  const sizes = distributeGroupSizes(teamCount, groupCount);
-  return { sizes, groupCount, label: formatLayoutLabel(sizes) };
 }
 
 function formatLayoutLabel(sizes: number[]): string {
@@ -127,40 +113,21 @@ export function computeGroupCount(teamCount: number): number {
 
 /** Forklaring av sluttspill for admin og hjelpetekst. */
 export function describePlayoffRules(layout: GroupLayout): string {
-  const { sizes, groupCount } = layout;
-
-  if (groupCount === 1) {
-    return 'Kun gruppespill — ingen sluttspill.';
-  }
-
-  if (groupCount === 2) {
-    const n = Math.min(...sizes);
+  if (layout.groupCount <= 1 && layout.format.knockoutSize === 4) {
     return (
-      `Etter gruppespill: ${n} plasseringskamp(er) — lik plassering møtes ` +
-      `(Nr 1 i A vs Nr 1 i B, osv.). Alle lag får én ekstra kamp. ` +
-      `Sluttspill kun i ${PLAYOFF_COURT}.`
+      `Etter gruppespill: ${layout.format.summary}. ` +
+      `Semifinale og finale i ${PLAYOFF_COURT}.`
     );
   }
 
-  if (groupCount === 3) {
-    return (
-      'Etter gruppespill: global rangering (poeng per kamp). Topp 4: semifinale (1–4, 2–3). ' +
-      'Deretter plasseringskamper for 5.–8., 9.–siste. Sluttspill kun i ' +
-      PLAYOFF_COURT +
-      '.'
-    );
-  }
-
-  if (groupCount === 4) {
-    return (
-      'Etter gruppespill: kvartfinaler (1A–2B, 1C–2D, osv.). ' +
-      `Sluttspill kun i ${PLAYOFF_COURT}.`
-    );
-  }
+  const rounds =
+    layout.format.knockoutSize === 8
+      ? 'kvartfinale, semifinale og finale'
+      : 'semifinale og finale';
 
   return (
-    'Etter gruppespill: global rangering, topp 8 til kvartfinale. ' +
-    `Sluttspill kun i ${PLAYOFF_COURT}.`
+    `Etter gruppespill: ${layout.format.summary}. ` +
+    `Sluttspill: ${rounds} i ${PLAYOFF_COURT}.`
   );
 }
 
@@ -309,13 +276,13 @@ function slotsToPairings(
   }));
 }
 
-/** Sluttspillkamper ut fra gruppeoppsett (delegerer til playoffs-modulen). */
+/** Sluttspillkamper ut fra turneringsformat. */
 export function buildPlayoffSlots(
   groups: Group[],
   layout: GroupLayout,
-  teamCount: number
+  _teamCount?: number
 ): PlayoffSlot[] {
-  return generatePlayoffSlots(groups, layout.groupCount, teamCount);
+  return generatePlayoffSlots(groups, layout.format);
 }
 
 /** Synk grupper med gjeldende lagliste (alle lag nøyaktig én gang). */
@@ -393,7 +360,7 @@ export function generateSeriesPairings(
     pairings.push(...roundRobinPairings(group.id, group.teamIds));
   }
 
-  if (layout.groupCount > 1 && teams.length > 0) {
+  if (layout.groupCount >= 1 && layout.format.knockoutSize > 0 && teams.length > 0) {
     const placeholderHomeId = teams[0].id;
     const placeholderAwayId =
       teams.length > 1 ? teams[1].id : teams[0].id;
@@ -412,7 +379,6 @@ export function generateSeriesPairings(
 export function countPlayoffPairings(teams: Team[]): number {
   if (teams.length < 2) return 0;
   const layout = computeGroupLayout(teams.length);
-  if (layout.groupCount <= 1) return 0;
   const groups = assignTeamsToGroups(teams, layout);
   return buildPlayoffSlots(groups, layout, teams.length).length;
 }
@@ -451,6 +417,25 @@ export function applyPlayoffTeamUpdates(
   return refreshPlayoffTeams(groups, matches, teams);
 }
 
+function resolveSeedMatch(
+  match: Match,
+  groups: Group[],
+  matches: Match[],
+  teams: Team[]
+): { home: string; away: string } | null {
+  const parsed = parsePlayoffLabel(match.label ?? '');
+  if (!parsed?.home.groupId.startsWith('SEED_')) return null;
+
+  const format = getTournamentFormat(teams.length);
+  const seeds = computeQualifiedSeeds(groups, matches, teams, format.advancement);
+  const homeSeed = Number(parsed.home.groupId.replace('SEED_', ''));
+  const awaySeed = Number(parsed.away.groupId.replace('SEED_', ''));
+  const home = teamIdForSeed(seeds, homeSeed);
+  const away = teamIdForSeed(seeds, awaySeed);
+  if (!home || !away) return null;
+  return { home, away };
+}
+
 /** Løs hjemme/borte for sluttspill ut fra tabell (null før gruppespill er ferdig). */
 export function getResolvedPlayoffTeamIds(
   match: Match,
@@ -460,6 +445,9 @@ export function getResolvedPlayoffTeamIds(
 ): { home: string; away: string } | null {
   if (!isPlayoffMatch(match) || !match.label) return null;
   if (!isGroupStageComplete(groups, matches)) return null;
+
+  const seedResolved = resolveSeedMatch(match, groups, matches, teams);
+  if (seedResolved) return seedResolved;
 
   const parsed = parsePlayoffLabel(match.label);
   if (!parsed) return null;
@@ -485,6 +473,16 @@ export function refreshPlayoffTeams(
 ): Match[] {
   return matches.map((m) => {
     if (!isPlayoffMatch(m) || !m.label) return m;
+
+    const seedResolved = resolveSeedMatch(m, groups, matches, teams);
+    if (seedResolved) {
+      return {
+        ...m,
+        homeTeamId: seedResolved.home,
+        awayTeamId: seedResolved.away,
+        court: PLAYOFF_COURT,
+      };
+    }
 
     const parsed = parsePlayoffLabel(m.label);
     if (!parsed) return m;

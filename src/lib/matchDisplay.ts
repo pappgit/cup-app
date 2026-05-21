@@ -36,12 +36,15 @@ export function getMatchDisplayParts(iso: string, court?: string): MatchDisplayP
 
 /** Visningsnavn for sluttspill før gruppespill er ferdig. */
 export function playoffLabelBeforeGroupEnd(label: string): string {
+  if (label.startsWith('Finale')) return 'Finale';
   if (label.startsWith('Semifinale')) return 'Semifinale';
+  if (label.startsWith('Play-in')) return 'Play-in';
   if (label.startsWith('Plassering')) {
     const tier = label.split(':')[0]?.trim();
     return tier || 'Plassering';
   }
   if (label.startsWith('Kvartfinale')) return 'Kvartfinale';
+  if (/Seed\s+\d+/i.test(label)) return 'Sluttspill';
   if (label.includes('gruppe')) return 'Sluttspill';
   return 'Sluttspill';
 }

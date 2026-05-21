@@ -1,11 +1,21 @@
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { ThemeApplier } from './ThemeApplier';
 import { useCup } from '../hooks/useCup';
 import { getSupabaseConfigStatus } from '../lib/supabase';
 
 export function CupLoader({ children }: { children: ReactNode }) {
-  const { loading, error } = useCup();
+  const { loading, error, refresh } = useCup();
   const config = getSupabaseConfigStatus();
+  const [slow, setSlow] = useState(false);
+
+  useEffect(() => {
+    if (!loading) {
+      setSlow(false);
+      return;
+    }
+    const t = setTimeout(() => setSlow(true), 8_000);
+    return () => clearTimeout(t);
+  }, [loading]);
 
   if (!config.ok) {
     return (

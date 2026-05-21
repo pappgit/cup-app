@@ -861,6 +861,8 @@ export function generateScheduleWithMeta(
     friendly: 0,
     crossover: 1,
     quarterfinal: 2,
+    semifinal: 3,
+    final: 4,
   };
   const pairings = [...rawPairings].sort(
     (a, b) =>

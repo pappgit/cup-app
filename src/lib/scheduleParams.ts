@@ -10,6 +10,9 @@ import { AVAILABLE_COURTS, DEFAULT_SCHEDULE_PARAMS } from '../types';
 
 function asCourtCount(value: unknown): CourtCount {
   const n = Number(value);
+  if (n >= 6) return 6;
+  if (n >= 5) return 5;
+  if (n >= 4) return 4;
   if (n >= 3) return 3;
   if (n >= 2) return 2;
   return 1;
@@ -227,7 +230,9 @@ export function normalizeScheduleParams(
     courts = defaultCourts(asCourtCount(parsed.courtCount));
   }
 
-  const courtCount = asCourtCount(Math.min(3, Math.max(1, courts.length)));
+  const courtCount = asCourtCount(
+    Math.min(AVAILABLE_COURTS.length, Math.max(1, courts.length))
+  );
 
   return {
     matchFormat: parsed.matchFormat ?? DEFAULT_SCHEDULE_PARAMS.matchFormat,

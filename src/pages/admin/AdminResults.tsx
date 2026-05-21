@@ -117,7 +117,13 @@ export function AdminResults() {
 
   const groupMatches = sortByTime(cupMatches.filter((m) => m.phase === 'group'));
   const playoffMatches = sortByTime(
-    cupMatches.filter((m) => m.phase === 'crossover' || m.phase === 'quarterfinal')
+    cupMatches.filter(
+      (m) =>
+        m.phase === 'crossover' ||
+        m.phase === 'quarterfinal' ||
+        m.phase === 'semifinal' ||
+        m.phase === 'final'
+    )
   );
   const friendlyMatches = sortByTime(
     cupMatches.filter((m) => !m.phase || m.phase === 'friendly')

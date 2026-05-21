@@ -1,6 +1,6 @@
 import type { Group, Match, StandingRow, Team } from '../types';
 
-const GROUP_LETTERS = ['A', 'B', 'C', 'D'] as const;
+const GROUP_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] as const;
 
 export function computeStandings(
   group: Group,
@@ -111,6 +111,36 @@ export function bestThirdPlaces(
   });
 
   return thirds.slice(0, count).map((r) => r.teamId);
+}
+
+/** Beste N andreplasser på tvers av grupper. */
+export function bestSecondPlaces(
+  groups: Group[],
+  matches: Match[],
+  teams: Team[],
+  count: number
+): string[] {
+  return rowsAtRank(groups, matches, teams, 2).slice(0, count).map((r) => r.teamId);
+}
+
+function rowsAtRank(
+  groups: Group[],
+  matches: Match[],
+  teams: Team[],
+  rank: number
+): StandingRow[] {
+  const rows: StandingRow[] = [];
+  for (const group of groups) {
+    const table = computeStandings(group, matches, teams);
+    if (table[rank - 1]) rows.push(table[rank - 1]);
+  }
+  rows.sort((a, b) => {
+    if (b.points !== a.points) return b.points - a.points;
+    if (b.goalDifference !== a.goalDifference) return b.goalDifference - a.goalDifference;
+    if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor;
+    return a.teamName.localeCompare(b.teamName, 'nb');
+  });
+  return rows;
 }
 
 export function groupLabel(index: number): string {

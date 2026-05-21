@@ -26,6 +26,14 @@ export function MatchCard({
   const hasScore = match.homeScore != null && match.awayScore != null;
   const isPlayoff = isPlayoffMatch(match);
   const isGroup = match.phase === 'group' && Boolean(match.groupId);
+  const phaseKind =
+    match.phase === 'final'
+      ? 'Finale'
+      : match.phase === 'semifinal'
+        ? 'Semifinale'
+        : match.phase === 'quarterfinal'
+          ? 'Kvartfinale'
+          : 'Sluttspill';
   const teamsPending = isPlayoff && homeName === PLAYOFF_TBD;
   const showPhaseCell = isGroup || isPlayoff;
 
@@ -74,7 +82,7 @@ export function MatchCard({
                 <span className="match-card-phase-detail">Gruppe {match.groupId}</span>
               </>
             ) : (
-              <span className="match-card-phase-kind">Sluttspill</span>
+              <span className="match-card-phase-kind">{phaseKind}</span>
             )}
           </div>
         )}

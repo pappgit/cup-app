@@ -25,6 +25,20 @@ interface CupContextValue {
 
 const CupContext = createContext<CupContextValue | null>(null);
 
+const FETCH_TIMEOUT_MS = 20_000;
+
+function fetchCupWithTimeout() {
+  return Promise.race([
+    fetchCup(),
+    new Promise<never>((_, reject) =>
+      setTimeout(
+        () => reject(new Error('Tidsavbrudd ved lasting av cup-data. Sjekk nettverk og Supabase.')),
+        FETCH_TIMEOUT_MS
+      )
+    ),
+  ]);
+}
+
 export function CupProvider({ children }: { children: ReactNode }) {
   const { isAdmin } = useAuth();
   const [cup, setCup] = useState<CupData>(DEFAULT_CUP);
@@ -34,6 +48,7 @@ export function CupProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const cupIdRef = useRef('');
   const cupRef = useRef(cup);
+  const loadGenRef = useRef(0);
   cupRef.current = cup;
 
   const load = useCallback(async () => {
@@ -42,16 +57,19 @@ export function CupProvider({ children }: { children: ReactNode }) {
       setLoading(false);
       return;
     }
+    const gen = ++loadGenRef.current;
     try {
       setError(null);
-      const data = await fetchCup();
+      const data = await fetchCupWithTimeout();
+      if (gen !== loadGenRef.current) return;
       cupIdRef.current = data.cupId;
       setCupId(data.cupId);
       setCup(stripCupMeta(data));
     } catch (e) {
+      if (gen !== loadGenRef.current) return;
       setError(e instanceof Error ? e.message : 'Kunne ikke laste cup-data');
     } finally {
-      setLoading(false);
+      if (gen === loadGenRef.current) setLoading(false);
     }
   }, []);
 
@@ -60,40 +78,44 @@ export function CupProvider({ children }: { children: ReactNode }) {
   }, [load]);
 
   useEffect(() => {
-    if (!supabase || !cupIdRef.current) return;
+    if (!supabase || !cupId) return;
 
-    const id = cupIdRef.current;
+    const id = cupId;
     const channel = supabase
       .channel(`cup-${id}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'cups', filter: `id=eq.${id}` },
-        () => load()
+        () => void load()
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'teams', filter: `cup_id=eq.${id}` },
-        () => load()
+        () => void load()
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'matches', filter: `cup_id=eq.${id}` },
-        () => load()
+        () => void load()
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'shop_items', filter: `cup_id=eq.${id}` },
-        () => load()
+        () => void load()
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'sponsors', filter: `cup_id=eq.${id}` },
-        () => load()
+        () => void load()
       )
-      .subscribe();
+      .subscribe((status, err) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn('[cup] realtime unavailable', err?.message ?? status);
+        }
+      });
 
     return () => {
-      supabase.removeChannel(channel);
+      void supabase.removeChannel(channel);
     };
   }, [cupId, load]);
 
