@@ -57,16 +57,18 @@ export function getMatchLabelForDisplay(
   return match.label;
 }
 
+const PLAYOFF_TBD = 'Lag kunngjøres etter gruppespill';
+
 export function getMatchTeamNamesForDisplay(
   match: Match,
   teamName: (id: string) => string,
   groupStageComplete: boolean
 ): { homeName: string; awayName: string } {
-  if (isPlayoffPhase(match.phase) && !groupStageComplete) {
-    return {
-      homeName: 'Lag kunngjøres etter gruppespill',
-      awayName: 'Lag kunngjøres etter gruppespill',
-    };
+  if (
+    isPlayoffPhase(match.phase) &&
+    (!groupStageComplete || match.homeTeamId === match.awayTeamId)
+  ) {
+    return { homeName: PLAYOFF_TBD, awayName: PLAYOFF_TBD };
   }
   return {
     homeName: teamName(match.homeTeamId),

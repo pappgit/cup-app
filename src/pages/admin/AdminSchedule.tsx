@@ -114,12 +114,12 @@ export function AdminSchedule() {
 
     if (result.backToBackTeams > 0) {
       setMsg(
-        `Generert ${matches.length} kamper. Advarsel: ${result.backToBackTeams} lag har kamper med liten pause` +
+        `Generert ${result.matches.length} kamper. Advarsel: ${result.backToBackTeams} lag har kamper med liten pause` +
           (tightNames ? ` (${tightNames})` : '') +
           ' — vurder mer halltid i matrisen.'
       );
     } else {
-      setMsg(`Generert ${matches.length} kamper!`);
+      setMsg(`Generert ${result.matches.length} kamper!`);
     }
     setTimeout(() => setMsg(''), 5000);
   };

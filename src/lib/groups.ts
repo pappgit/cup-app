@@ -292,19 +292,15 @@ function resolveSlotWithFallback(
 /** Sluttspillkamper inkluderes alltid (med etikett); lag settes etter gruppespill. */
 function slotsToPairings(
   slots: PlayoffSlot[],
-  groups: Group[],
-  order: Map<string, string[]>,
-  globalOrder: string[],
-  placeholderTeamId: string
+  placeholderHomeId: string,
+  placeholderAwayId: string
 ): ScheduledPairing[] {
-  return slots
-    .map((s) => ({
-      home: placeholderTeamId,
-      away: placeholderTeamId,
-      phase: s.phase,
-      label: s.label,
-    }))
-    .filter((p): p is ScheduledPairing => Boolean(p.home && p.away));
+  return slots.map((s) => ({
+    home: placeholderHomeId,
+    away: placeholderAwayId,
+    phase: s.phase,
+    label: s.label,
+  }));
 }
 
 /** Sluttspillkamper ut fra gruppeoppsett (delegerer til playoffs-modulen). */
@@ -334,14 +330,14 @@ export function generateSeriesPairings(teams: Team[]): {
   }
 
   if (layout.groupCount > 1 && teams.length > 0) {
-    const placeholderTeamId = teams[0].id;
+    const placeholderHomeId = teams[0].id;
+    const placeholderAwayId =
+      teams.length > 1 ? teams[1].id : teams[0].id;
     pairings.push(
       ...slotsToPairings(
         buildPlayoffSlots(groups, layout, teams.length),
-        groups,
-        provisionalStandings(groups),
-        provisionalGlobalOrder(groups),
-        placeholderTeamId
+        placeholderHomeId,
+        placeholderAwayId
       )
     );
   }

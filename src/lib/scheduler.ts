@@ -791,7 +791,29 @@ function schedulePairingsOnSlots(
   return { scheduled, remaining };
 }
 
-/** Ekstra Høyenhallen-slots med MIN_WAVE_GAP mellom bølger når matrisen er full. */
+/** Sluttspill uten lagrestriksjoner (placeholder-lag til gruppespill er ferdig). */
+function schedulePlayoffsOnSlots(
+  pairings: Pairing[],
+  slots: ScheduleSlot[],
+  matches: Match[],
+  startRound: number
+): { scheduled: number; remaining: Pairing[] } {
+  const remaining = [...pairings];
+  let scheduled = 0;
+
+  for (const slot of slots) {
+    if (remaining.length === 0) break;
+    const p = remaining.shift()!;
+    matches.push(
+      pairingToMatch(p, formatTime(slot.start), slot.court, startRound + scheduled)
+    );
+    scheduled++;
+  }
+
+  return { scheduled, remaining };
+}
+
+/** Ekstra Høyenhallen-slots når matrisen er full (én slot per kamp). */
 function buildFallbackPlayoffSlots(
   count: number,
   notBefore: Date | undefined,
@@ -805,7 +827,7 @@ function buildFallbackPlayoffSlots(
 
   if (cursor === 0 && existingSlots.length > 0) {
     const last = existingSlots[existingSlots.length - 1];
-    cursor = last.start.getTime() + slotMs * MIN_WAVE_GAP;
+    cursor = last.start.getTime() + slotMs;
   }
   if (cursor === 0) {
     const firstDay = params.days[0]?.date ?? '2026-06-01';
@@ -815,7 +837,7 @@ function buildFallbackPlayoffSlots(
 
   let wave =
     existingSlots.length > 0
-      ? existingSlots[existingSlots.length - 1].waveIndex + MIN_WAVE_GAP
+      ? existingSlots[existingSlots.length - 1].waveIndex + 1
       : 0;
 
   const slots: ScheduleSlot[] = [];
@@ -825,8 +847,8 @@ function buildFallbackPlayoffSlots(
       court: PLAYOFF_COURT,
       waveIndex: wave,
     });
-    cursor += slotMs * MIN_WAVE_GAP;
-    wave += MIN_WAVE_GAP;
+    cursor += slotMs;
+    wave += 1;
   }
   return slots;
 }
@@ -849,19 +871,6 @@ function runFullSchedule(
     1
   );
 
-  const groupTimeToWave =
-    matches.length > 0
-      ? buildTimeToWaveFromMatches(matches)
-      : buildTimeToWave(allSlots);
-  const lastWave = lastWaveFromMatches(matches, groupTimeToWave);
-  const gamesScheduled = countGamesPerTeam(
-    matches.map((m) => ({
-      home: m.homeTeamId,
-      away: m.awayTeamId,
-    })),
-    teams
-  );
-
   let notBefore: Date | undefined;
   const matchDurMs = matchDurationMinutes(params) * 60_000;
   for (const m of matches) {
@@ -873,15 +882,11 @@ function runFullSchedule(
   }
 
   let playoffSlotList = playoffSlotsFrom(allSlots, notBefore);
-  const playoffResult = schedulePairingsOnSlots(
+  const playoffResult = schedulePlayoffsOnSlots(
     playoffPairings,
     playoffSlotList,
-    teams,
-    params,
     matches,
-    matches.length + 1,
-    lastWave,
-    gamesScheduled
+    matches.length + 1
   );
 
   if (playoffResult.remaining.length > 0) {
@@ -891,19 +896,11 @@ function runFullSchedule(
       params,
       [...allSlots, ...playoffSlotList]
     );
-    const waveMap = buildTimeToWaveFromMatches(matches);
-    schedulePairingsOnSlots(
+    schedulePlayoffsOnSlots(
       playoffResult.remaining,
       fallback,
-      teams,
-      params,
       matches,
-      matches.length + 1,
-      lastWaveFromMatches(matches, waveMap),
-      countGamesPerTeam(
-        matches.map((m) => ({ home: m.homeTeamId, away: m.awayTeamId })),
-        teams
-      )
+      matches.length + 1
     );
   }
 

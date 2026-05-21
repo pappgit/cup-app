@@ -49,8 +49,17 @@ export function defaultCourts(count: CourtCount): string[] {
   return [...AVAILABLE_COURTS].slice(0, count);
 }
 
+function hasValidHallTimes(hall: CourtHallTime): boolean {
+  return Boolean(
+    hall.timeFrom &&
+      hall.timeTo &&
+      hall.timeTo > hall.timeFrom
+  );
+}
+
 export function isCourtEnabledOnDay(day: CupDaySchedule, court: string): boolean {
-  return getCourtHallTime(day, court).enabled === true;
+  const hall = getCourtHallTime(day, court);
+  return hall.enabled === true && hasValidHallTimes(hall);
 }
 
 export function getCourtHallTime(day: CupDaySchedule, court: string): CourtHallTime {
@@ -139,8 +148,8 @@ export function appendScheduleDay(days: CupDaySchedule[]): CupDaySchedule[] {
   const last = days[days.length - 1];
   const next = syncDayCourtTimes({
     date: addDays(last.date, 1),
-    timeFrom: base.timeFrom,
-    timeTo: base.timeTo,
+    timeFrom: last.timeFrom,
+    timeTo: last.timeTo,
     courtTimes: AVAILABLE_COURTS.map((court) => {
       const src = getCourtHallTime(last, court);
       return { court, timeFrom: src.timeFrom, timeTo: src.timeTo, enabled: false };
@@ -160,9 +169,16 @@ export function removeScheduleDay(
 function normalizeDay(day: CupDaySchedule): CupDaySchedule {
   const timeFrom = day.timeFrom ?? '09:00';
   const timeTo = day.timeTo ?? '17:00';
-  let synced = syncDayCourtTimes({ ...day, timeFrom, timeTo });
-
-  return synced;
+  const synced = syncDayCourtTimes({ ...day, timeFrom, timeTo });
+  const courtTimes = (synced.courtTimes ?? []).map((c) => {
+    if (c.enabled !== true) return c;
+    return {
+      ...c,
+      timeFrom: c.timeFrom || timeFrom,
+      timeTo: c.timeTo || timeTo,
+    };
+  });
+  return { ...synced, courtTimes };
 }
 
 /** Støtt gamle lagrede parametere (enkelt startdato/tid). */

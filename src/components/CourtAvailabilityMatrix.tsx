@@ -34,18 +34,26 @@ export function CourtAvailabilityMatrix({
   ) => {
     const day = params.days[dayIndex];
     const hall = getCourtHallTime(day, court);
+    const defaultFrom = day.timeFrom ?? '09:00';
+    const defaultTo = day.timeTo ?? '17:00';
     const courtTimes = (day.courtTimes ?? []).map((c) => {
       if (c.court !== court) return c;
       const enabled =
         patch.enabled !== undefined ? patch.enabled : c.enabled === true;
-      return { ...c, ...patch, enabled };
+      const timeFrom =
+        patch.timeFrom ??
+        (enabled && !c.timeFrom ? defaultFrom : c.timeFrom);
+      const timeTo =
+        patch.timeTo ?? (enabled && !c.timeTo ? defaultTo : c.timeTo);
+      return { ...c, ...patch, enabled, timeFrom, timeTo };
     });
     if (!courtTimes.some((c) => c.court === court)) {
+      const enabled = patch.enabled === true;
       courtTimes.push({
         court,
-        timeFrom: hall.timeFrom,
-        timeTo: hall.timeTo,
-        enabled: patch.enabled === true,
+        timeFrom: patch.timeFrom ?? (enabled ? defaultFrom : hall.timeFrom),
+        timeTo: patch.timeTo ?? (enabled ? defaultTo : hall.timeTo),
+        enabled,
         ...patch,
       });
     }
