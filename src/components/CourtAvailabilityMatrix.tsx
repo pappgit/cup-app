@@ -63,19 +63,6 @@ export function CourtAvailabilityMatrix({
     onChange(days);
   };
 
-  const copyDayToAll = (fromIndex: number) => {
-    const source = params.days[fromIndex];
-    const days = params.days.map((d, i) => {
-      if (i === fromIndex) return d;
-      const courtTimes = AVAILABLE_COURTS.map((court) => {
-        const src = getCourtHallTime(source, court);
-        return { ...src, court };
-      });
-      return syncAllDaysCourtTimes([{ ...d, courtTimes }])[0];
-    });
-    onChange(days);
-  };
-
   return (
     <div className="court-matrix">
       <p className="court-matrix-intro">
@@ -175,21 +162,6 @@ export function CourtAvailabilityMatrix({
           </tbody>
         </table>
       </div>
-
-      {params.days.length > 1 && (
-        <div className="court-matrix-actions">
-          {params.days.map((_, i) => (
-            <button
-              key={i}
-              type="button"
-              className="btn btn-outline btn-sm"
-              onClick={() => copyDayToAll(i)}
-            >
-              Kopier dag {i + 1} til alle dager
-            </button>
-          ))}
-        </div>
-      )}
 
       <div className="court-overview">
         <h3 className="court-overview-title">Oversikt tilgjengelighet</h3>
