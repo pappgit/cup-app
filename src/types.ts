@@ -141,6 +141,8 @@ export interface PageContent {
   participantInfo: string;
   /** Logo øverst i sidemenyen (fil i public/ eller Supabase URL) */
   sidebarLogoUrl: string;
+  /** Bilde på kiosksiden (meny/prisliste) */
+  kioskImageUrl?: string;
   navItems: NavItemConfig[];
   theme: AppTheme;
 }

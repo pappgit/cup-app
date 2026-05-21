@@ -29,6 +29,10 @@ export function normalizePageContent(raw: PageContent | null | undefined): PageC
       typeof raw.sidebarLogoUrl === 'string' && raw.sidebarLogoUrl.trim()
         ? raw.sidebarLogoUrl.trim()
         : DEFAULT_SIDEBAR_LOGO,
+    kioskImageUrl:
+      typeof raw.kioskImageUrl === 'string' && raw.kioskImageUrl.trim()
+        ? raw.kioskImageUrl.trim()
+        : undefined,
     navItems: normalizeNavItems(raw.navItems),
     theme: normalizeTheme(raw.theme),
   };
@@ -36,4 +40,9 @@ export function normalizePageContent(raw: PageContent | null | undefined): PageC
 
 export function getSidebarLogoUrl(content: PageContent): string {
   return resolveAssetUrl(content.sidebarLogoUrl || DEFAULT_SIDEBAR_LOGO);
+}
+
+export function getKioskImageUrl(content: PageContent): string | null {
+  if (!content.kioskImageUrl) return null;
+  return resolveAssetUrl(content.kioskImageUrl);
 }

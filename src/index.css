@@ -886,6 +886,37 @@ img {
 }
 
 /* ─── Shop ─── */
+.kiosk-hero-image {
+  margin-bottom: 1.25rem;
+  padding: 0;
+  overflow: hidden;
+}
+
+.kiosk-hero-image img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: min(70vh, 520px);
+  object-fit: contain;
+  background: var(--grey-50);
+}
+
+.kiosk-image-preview {
+  border: 1px solid var(--grey-200);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--grey-50);
+  max-width: 480px;
+}
+
+.kiosk-image-preview img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 280px;
+  object-fit: contain;
+}
+
 .shop-grid {
   display: grid;
   gap: 1rem;
