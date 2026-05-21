@@ -23,31 +23,39 @@ export function MatchesPage() {
   }, [cupMatches, viewFilter, groupStageComplete]);
 
   return (
-    <>
+    <div className="page-stack">
       <header className="page-header">
         <h1 className="page-title">Kamper</h1>
-        {matches.length > 0 && (
-          <p className="page-subtitle">
-            {matches.length} kamp{matches.length !== 1 ? 'er' : ''}
-            {viewFilter ? ` · ${teamName(viewFilter)}` : ' · hele programmet'}
-          </p>
-        )}
+        <p className="page-subtitle">
+          {matches.length > 0
+            ? `${matches.length} kamp${matches.length !== 1 ? 'er' : ''}${
+                viewFilter ? ` · ${teamName(viewFilter)}` : ' · hele programmet'
+              }`
+            : 'Kamprogrammet publiseres snart.'}
+        </p>
       </header>
 
       {cup.teams.length > 0 && (
-        <div className="card filter-bar">
+        <div className="filter-bar">
           <ScheduleTeamFilter
             teams={cup.teams}
             value={viewFilter}
             onChange={setViewFilter}
             id="matches-team-filter"
+            label="Vis kamper for"
           />
         </div>
       )}
 
       <div className="card">
-        <MatchList matches={matches} teamName={teamName} favoriteTeamId={viewFilter || null} />
+        <h2>Program</h2>
+        <MatchList
+          matches={matches}
+          teamName={teamName}
+          favoriteTeamId={viewFilter || null}
+          emptyMessage="Ingen kamper å vise med valgt filter."
+        />
       </div>
-    </>
+    </div>
   );
 }

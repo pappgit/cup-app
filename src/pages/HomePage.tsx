@@ -11,7 +11,7 @@ export function HomePage() {
   const forsideSponsor = sponsorForPlacement(cup.sponsors, 'forside');
 
   return (
-    <>
+    <div className="page-stack">
       <section className="hero" aria-label="Velkommen">
         <h1>Velkommen til {cup.name}!</h1>
         {content.heroSubtitle && <p className="hero-lead">{content.heroSubtitle}</p>}
@@ -22,14 +22,15 @@ export function HomePage() {
 
       <div className="card">
         <h2>Info til deltakere</h2>
+        <p className="card-lead">Praktisk informasjon for spillere og foreldre.</p>
         {content.participantInfo.trim() ? (
           <div className="participant-info">{content.participantInfo}</div>
         ) : (
-          <p className="empty-state" style={{ padding: '1rem 0' }}>
+          <p className="empty-state" style={{ margin: 0 }}>
             Informasjon kommer snart.
           </p>
         )}
       </div>
-    </>
+    </div>
   );
 }

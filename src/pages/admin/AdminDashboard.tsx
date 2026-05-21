@@ -1,38 +1,51 @@
 import { useCup } from '../../hooks/useCup';
 
+const GUIDE_STEPS = [
+  'Rediger velkomsttekst og deltakerinfo under Forside',
+  'Last opp sponsorlogoer med plassering under Sponsorer',
+  'Tilpass menyikoner og farger under Utseende',
+  'Sett cupnavn og antall lag under Lag',
+  'Legg inn alle lagnavn',
+  'Konfigurer parametere og generer kamprogram under Kamprogram',
+  'Legg til kioskvarer',
+  'Eksporter data fra Innstillinger for backup',
+];
+
 export function AdminDashboard() {
   const { cup } = useCup();
 
   return (
-    <div className="admin-grid two-col">
-      <div className="card">
-        <h2>Cup</h2>
-        <p>
-          <strong>{cup.name}</strong>
-        </p>
-        <p>
-          {cup.teams.length} lag registrert
-        </p>
-        <p>{cup.matches.length} kamper i programmet</p>
+    <>
+      <div className="stat-grid" style={{ marginBottom: '1.25rem' }}>
+        <div className="stat-card">
+          <span className="stat-card-value">{cup.teams.length}</span>
+          <span className="stat-card-label">Lag</span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-card-value">{cup.matches.length}</span>
+          <span className="stat-card-label">Kamper</span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-card-value">{cup.shopItems.length}</span>
+          <span className="stat-card-label">Kioskvarer</span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-card-value">{cup.sponsors.length}</span>
+          <span className="stat-card-label">Sponsorer</span>
+        </div>
       </div>
+
       <div className="card">
-        <h2>Kiosk & sponsorer</h2>
-        <p>{cup.shopItems.length} varer i kiosken</p>
-        <p>{cup.sponsors.length} sponsorlogoer</p>
-      </div>
-      <div className="card" style={{ gridColumn: '1 / -1' }}>
         <h2>Hurtigguide</h2>
-        <ol style={{ margin: 0, paddingLeft: '1.25rem', lineHeight: 1.8 }}>
-          <li>Rediger velkomsttekst og deltakerinfo under Forside</li>
-          <li>Last opp sponsorlogoer med plassering under Sponsorer</li>
-          <li>Tilpass menyikoner og farger under Utseende</li>
-          <li>Sett cupnavn og antall lag under Lag</li>
-          <li>Legg inn alle lagnavn</li>
-          <li>Konfigurer parametere og generer kamprogram under Kamprogram</li>
-          <li>Legg til kioskvarer og sponsorlogoer</li>
-          <li>Eksporter data fra Innstillinger for backup</li>
+        <p className="card-lead">
+          Anbefalt rekkefølge når du setter opp cupen for første gang.
+        </p>
+        <ol className="admin-guide">
+          {GUIDE_STEPS.map((step) => (
+            <li key={step}>{step}</li>
+          ))}
         </ol>
       </div>
-    </div>
+    </>
   );
 }

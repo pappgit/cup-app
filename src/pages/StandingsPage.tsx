@@ -23,13 +23,15 @@ export function StandingsPage() {
   }
 
   return (
-    <>
+    <div className="page-stack">
       <header className="page-header">
         <h1 className="page-title">Tabell</h1>
         {subtitle && <p className="page-subtitle">{subtitle}</p>}
       </header>
 
-      <StandingsTables groups={groups} matches={cup.matches} teams={cup.teams} />
-    </>
+      <div className="card">
+        <StandingsTables groups={groups} matches={cup.matches} teams={cup.teams} />
+      </div>
+    </div>
   );
 }

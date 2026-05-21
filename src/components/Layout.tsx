@@ -52,7 +52,11 @@ export function Layout() {
           </div>
         </header>
 
-        {cupError && <div className="alert alert-error">{cupError}</div>}
+        {cupError && (
+          <div className="alert alert-error" style={{ marginBottom: '1rem' }}>
+            {cupError}
+          </div>
+        )}
 
         <div className="page-container">
           <Outlet context={{ menuOpen, setMenuOpen }} />

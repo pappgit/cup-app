@@ -10,18 +10,17 @@ export function ShopPage() {
   const kioskImage = getKioskImageUrl(content);
 
   return (
-    <>
-      <h1 className="page-title">Kiosk</h1>
+    <div className="page-stack">
+      <header className="page-header">
+        <h1 className="page-title">Kiosk</h1>
+        <p className="page-subtitle">Varer tilgjengelig i hallen under cupen.</p>
+      </header>
 
       {kioskImage && (
         <div className="kiosk-hero-image card">
           <img src={kioskImage} alt="Kioskmeny" />
         </div>
       )}
-
-      <p style={{ color: 'var(--grey-600)', marginBottom: '1.5rem' }}>
-        Varer tilgjengelig i hallen under cupen.
-      </p>
 
       {items.length === 0 ? (
         <div className="card">
@@ -30,7 +29,7 @@ export function ShopPage() {
       ) : (
         <div className="shop-grid">
           {items.map((item) => (
-            <div key={item.id} className="shop-item card">
+            <div key={item.id} className="shop-item">
               {item.imageUrl && (
                 <div className="shop-item-image-wrap">
                   <img src={item.imageUrl} alt="" className="shop-item-image" />
@@ -47,6 +46,6 @@ export function ShopPage() {
       )}
 
       <SponsorStrip sponsors={cup.sponsors} />
-    </>
+    </div>
   );
 }
