@@ -26,7 +26,9 @@
   --space-page: 1rem;
   --touch-min: 48px;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
-  --match-rail-width: 4.25rem;
+  --match-cell-schedule: 4.5rem;
+  --match-cell-court: 3.25rem;
+  --match-cell-phase: 4.75rem;
 }
 
 *,
@@ -598,7 +600,7 @@ img {
 
 .match-card {
   display: grid;
-  grid-template-columns: var(--match-rail-width) 1fr;
+  grid-template-columns: var(--match-cell-schedule) var(--match-cell-court) 1fr;
   gap: 0;
   background: var(--white);
   border: 1px solid var(--grey-200);
@@ -608,86 +610,125 @@ img {
   transition: transform 0.2s var(--ease), box-shadow 0.2s;
 }
 
+.match-card--has-phase {
+  grid-template-columns: var(--match-cell-schedule) var(--match-cell-court) var(--match-cell-phase) 1fr;
+}
+
+.match-card--no-phase.match-card--no-court {
+  grid-template-columns: var(--match-cell-schedule) 1fr;
+}
+
 .match-card:active {
   transform: scale(0.995);
 }
 
-.match-card-rail {
+.match-card-meta {
+  display: contents;
+}
+
+.match-card-cell {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.35rem;
-  width: var(--match-rail-width);
-  min-width: var(--match-rail-width);
-  max-width: var(--match-rail-width);
-  box-sizing: border-box;
-  padding: 0.85rem 0.5rem;
-  background: linear-gradient(180deg, var(--purple) 0%, var(--purple-dark) 100%);
+  gap: 0.25rem;
+  padding: 0.75rem 0.4rem;
+  text-align: center;
+  border-right: 1px solid rgba(255, 255, 255, 0.2);
   color: var(--white);
+  background: linear-gradient(180deg, var(--purple) 0%, var(--purple-dark) 100%);
+}
+
+.match-card-cell--schedule {
+  grid-column: 1;
+}
+
+.match-card-cell--court {
+  grid-column: 2;
+}
+
+.match-card-cell--phase {
+  grid-column: 3;
+}
+
+.match-card--no-phase .match-card-cell--court {
+  grid-column: 2;
 }
 
 .match-card-number {
-  font-size: 0.68rem;
+  font-size: 0.62rem;
   font-weight: 800;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  opacity: 0.92;
+  opacity: 0.9;
+  line-height: 1;
 }
 
 .match-card-time {
-  font-size: 1.15rem;
+  font-size: 1.05rem;
   font-weight: 800;
-  line-height: 1;
+  line-height: 1.1;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
 }
 
 .match-card-court-abbr {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 2.5rem;
-  padding: 0.2rem 0.35rem;
-  font-size: 0.82rem;
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1.1;
+}
+
+.match-card-phase-kind {
+  font-size: 0.58rem;
   font-weight: 800;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  line-height: 1;
-  background: rgba(255, 255, 255, 0.18);
-  border-radius: var(--radius-xs);
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  line-height: 1.15;
+  opacity: 0.92;
 }
 
-.match-card--playoff .match-card-court-abbr {
-  background: rgba(0, 0, 0, 0.12);
-  border-color: rgba(0, 0, 0, 0.15);
+.match-card-phase-detail {
+  font-size: 0.88rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
 }
 
 .match-card-main {
+  grid-row: 1;
   padding: 0.85rem 1rem;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 0.5rem;
+  gap: 0.45rem;
   min-width: 0;
+  background: var(--white);
 }
 
-.match-card-group-badge {
-  align-self: flex-start;
-  display: inline-block;
-  padding: 0.28rem 0.65rem;
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--white);
-  background: var(--purple);
-  border-radius: var(--radius-xs);
+.match-card--has-phase .match-card-main {
+  grid-column: 4;
 }
 
-.match-card--group .match-card-main {
-  gap: 0.55rem;
+.match-card--no-phase .match-card-main {
+  grid-column: 3;
+}
+
+.match-card--no-phase.match-card--no-court .match-card-main {
+  grid-column: 2;
+}
+
+.match-card--has-phase.match-card--no-court {
+  grid-template-columns: var(--match-cell-schedule) var(--match-cell-phase) 1fr;
+}
+
+.match-card--has-phase.match-card--no-court .match-card-cell--phase {
+  grid-column: 2;
+}
+
+.match-card--has-phase.match-card--no-court .match-card-main {
+  grid-column: 3;
 }
 
 .match-card-label {
@@ -775,37 +816,24 @@ img {
   box-shadow: var(--shadow-sm), 0 0 0 2px var(--yellow-glow);
 }
 
-.match-card--highlight .match-card-rail {
+.match-card--highlight .match-card-cell {
   background: linear-gradient(180deg, var(--yellow-dark) 0%, #c9a800 100%);
   color: var(--purple-dark);
 }
 
 .match-card--playoff {
   border-color: #e8c06a;
-  background: linear-gradient(135deg, #fffbf3 0%, #fff 55%);
   box-shadow: var(--shadow-sm), inset 3px 0 0 #e8a838;
 }
 
-.match-card--playoff .match-card-rail {
+.match-card--playoff .match-card-cell {
   background: linear-gradient(180deg, #f0b429 0%, #c47f17 100%);
   color: #3d2a00;
+  border-right-color: rgba(0, 0, 0, 0.12);
 }
 
-.match-card-playoff-badge {
-  display: block;
-  font-size: 0.58rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  opacity: 0.95;
-  margin-bottom: 0.2rem;
-}
-
-.match-card--playoff .match-card-number {
-  color: inherit;
-  opacity: 0.85;
-  font-size: 0.65rem;
-  font-weight: 800;
+.match-card--playoff .match-card-cell--phase-playoff {
+  background: linear-gradient(180deg, #e8a838 0%, #b86d10 100%);
 }
 
 .match-card-tbd {
@@ -823,7 +851,7 @@ img {
   box-shadow: var(--shadow-sm), 0 0 0 2px var(--yellow-glow), inset 3px 0 0 var(--yellow);
 }
 
-.match-card--playoff.match-card--highlight .match-card-rail {
+.match-card--playoff.match-card--highlight .match-card-cell {
   background: linear-gradient(180deg, var(--yellow) 0%, var(--yellow-dark) 100%);
   color: var(--purple-dark);
 }
@@ -832,8 +860,8 @@ img {
   padding: 0.65rem 0.85rem;
 }
 
-.match-card--compact .match-card-rail {
-  padding: 0.65rem 0.45rem;
+.match-card--compact .match-card-cell {
+  padding: 0.6rem 0.35rem;
 }
 
 .match-card--compact .match-card-time {

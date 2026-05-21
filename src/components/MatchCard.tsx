@@ -27,46 +27,60 @@ export function MatchCard({
   const isPlayoff = isPlayoffMatch(match);
   const isGroup = match.phase === 'group' && Boolean(match.groupId);
   const teamsPending = isPlayoff && homeName === PLAYOFF_TBD;
+  const showPhaseCell = isGroup || isPlayoff;
 
   const playoffDetail =
     isPlayoff && displayLabel && !displayLabel.startsWith('Sluttspill')
       ? displayLabel
-      : isPlayoff && displayLabel === 'Sluttspill'
-        ? undefined
-        : isPlayoff
-          ? displayLabel
-          : undefined;
+      : undefined;
 
   return (
     <article
       className={`match-card ${highlight ? 'match-card--highlight' : ''} ${
         compact ? 'match-card--compact' : ''
-      } ${isPlayoff ? 'match-card--playoff' : ''} ${isGroup ? 'match-card--group' : ''}`}
+      } ${isPlayoff ? 'match-card--playoff' : ''} ${isGroup ? 'match-card--group' : ''} ${
+        showPhaseCell ? 'match-card--has-phase' : 'match-card--no-phase'
+      } ${courtAbbrev ? '' : 'match-card--no-court'}`}
     >
-      <div className="match-card-rail">
-        {isPlayoff && <span className="match-card-playoff-badge">Sluttspill</span>}
-        {match.matchNumber != null && (
-          <span className="match-card-number">#{match.matchNumber}</span>
-        )}
-        <time className="match-card-time" dateTime={match.startTime}>
-          {time}
-        </time>
+      <div className="match-card-meta">
+        <div className="match-card-cell match-card-cell--schedule">
+          {match.matchNumber != null && (
+            <span className="match-card-number">#{match.matchNumber}</span>
+          )}
+          <time className="match-card-time" dateTime={match.startTime}>
+            {time}
+          </time>
+        </div>
+
         {courtAbbrev && (
-          <span
-            className="match-card-court-abbr"
+          <div
+            className="match-card-cell match-card-cell--court"
             title={courtTitle}
             aria-label={`Hall: ${court ?? courtAbbrev}`}
           >
-            {courtAbbrev}
-          </span>
+            <span className="match-card-court-abbr">{courtAbbrev}</span>
+          </div>
+        )}
+
+        {showPhaseCell && (
+          <div
+            className={`match-card-cell match-card-cell--phase ${
+              isPlayoff ? 'match-card-cell--phase-playoff' : ''
+            }`}
+          >
+            {isGroup ? (
+              <>
+                <span className="match-card-phase-kind">Gruppespill</span>
+                <span className="match-card-phase-detail">Gruppe {match.groupId}</span>
+              </>
+            ) : (
+              <span className="match-card-phase-kind">Sluttspill</span>
+            )}
+          </div>
         )}
       </div>
 
       <div className="match-card-main">
-        {isGroup && (
-          <span className="match-card-group-badge">Gruppe {match.groupId}</span>
-        )}
-
         {isPlayoff && playoffDetail && (
           <span className="match-card-label match-card-label--playoff">{playoffDetail}</span>
         )}
