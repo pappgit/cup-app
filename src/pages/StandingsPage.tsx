@@ -1,8 +1,9 @@
-import { useMemo } from 'react';
+import { Navigate } from 'react-router-dom';
 import { useCup } from '../hooks/useCup';
 import { computeStandings } from '../lib/standings';
 import { normalizeScheduleParams } from '../lib/scheduleParams';
 import { DEFAULT_SCHEDULE_PARAMS } from '../types';
+import { useMemo } from 'react';
 
 export function StandingsPage() {
   const { cup } = useCup();
@@ -18,12 +19,16 @@ export function StandingsPage() {
     [groups, cup.matches, cup.teams]
   );
 
-  if (!params.seriesPlay || groups.length === 0) {
+  if (!params.seriesPlay) {
+    return <Navigate to="/" replace />;
+  }
+
+  if (groups.length === 0) {
     return (
       <div className="empty-state">
-        <p>Tabell er tilgjengelig når cupen kjører seriespill med grupper.</p>
+        <p>Tabell er tilgjengelig når kamprogram er generert med sluttspill.</p>
         <p style={{ fontSize: '0.9rem', color: 'var(--grey-600)' }}>
-          Admin genererer kamprogram med «Seriekamper: Ja».
+          Admin: sett Sluttspill til Ja under Kamprogram og generer kamprogram.
         </p>
       </div>
     );

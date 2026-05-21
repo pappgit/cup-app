@@ -12,6 +12,8 @@ interface SidebarProps {
   isAdmin?: boolean;
   sponsors: Sponsor[];
   pageContent?: typeof DEFAULT_PAGE_CONTENT;
+  /** Tabell kun ved sluttspill (seriesPlay ja) */
+  showStandings?: boolean;
 }
 
 export function Sidebar({
@@ -21,10 +23,13 @@ export function Sidebar({
   isAdmin,
   sponsors,
   pageContent,
+  showStandings = false,
 }: SidebarProps) {
   const base = import.meta.env.BASE_URL;
   const content = normalizePageContent(pageContent ?? DEFAULT_PAGE_CONTENT);
-  const navItems = normalizeNavItems(content.navItems);
+  const navItems = normalizeNavItems(content.navItems).filter(
+    (item) => item.path !== '/tabell' || showStandings
+  );
 
   return (
     <>

@@ -874,6 +874,66 @@ img {
   max-width: 28em;
 }
 
+.hero-team-picker {
+  margin-bottom: 1.35rem;
+}
+
+.hero-team-picker-title {
+  margin: 0 0 0.5rem;
+  font-size: 1.25rem;
+  font-weight: 800;
+  position: relative;
+  z-index: 1;
+  letter-spacing: -0.02em;
+}
+
+.hero-team-picker-desc {
+  margin: 0 0 1rem;
+  opacity: 0.92;
+  font-size: 0.9rem;
+  position: relative;
+  z-index: 1;
+  line-height: 1.45;
+}
+
+.hero-team-picker-active {
+  margin: 0.85rem 0 0;
+  font-size: 0.9rem;
+  position: relative;
+  z-index: 1;
+}
+
+.hero-team-picker-active strong {
+  color: var(--yellow);
+}
+
+.schedule-toolbar--hero {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+}
+
+.schedule-toolbar--hero .form-group label {
+  color: rgba(255, 255, 255, 0.95);
+  font-weight: 700;
+}
+
+.schedule-toolbar--hero select {
+  width: 100%;
+  max-width: 320px;
+  min-height: var(--touch-min);
+  border-radius: var(--radius-sm);
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--white);
+  font-weight: 600;
+}
+
+.schedule-toolbar--hero select option {
+  color: var(--text);
+  background: var(--white);
+}
+
 @media (min-width: 480px) {
   .hero {
     padding: 2.25rem 1.75rem;
@@ -881,6 +941,10 @@ img {
 
   .hero h1 {
     font-size: 1.85rem;
+  }
+
+  .hero-team-picker-title {
+    font-size: 1.35rem;
   }
 }
 
@@ -1117,9 +1181,32 @@ img {
 
 .result-row-scores {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: center;
-  gap: 0.6rem;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.score-field {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.score-field-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--grey-600);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.score-separator {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--purple);
+  padding-bottom: 0.5rem;
 }
 
 @media (min-width: 600px) {

@@ -318,7 +318,7 @@ export function AdminSchedule() {
             </div>
           )}
           <div className="form-group">
-            <label>Seriekamper</label>
+            <label>Sluttspill</label>
             <select
               value={params.seriesPlay ? 'ja' : 'nei'}
               onChange={(e) => setParams({ seriesPlay: e.target.value === 'ja' })}
@@ -350,7 +350,7 @@ export function AdminSchedule() {
 
         {!params.seriesPlay && (
           <p style={{ fontSize: '0.85rem', color: 'var(--grey-600)', marginTop: '0.5rem' }}>
-            Uten seriespill: hvert lag spiller valgt antall kamper mot{' '}
+            Uten sluttspill: hvert lag spiller valgt antall kamper mot{' '}
             <strong>forskjellige</strong> motstandere (samme lag møtes ikke to ganger).
           </p>
         )}

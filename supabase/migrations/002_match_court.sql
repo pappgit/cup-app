@@ -1,2 +1,3 @@
--- Legg til bane på kamper (kjør i Supabase SQL Editor)
+-- 002_match_court.sql
+-- Legg til bane på kamper
 alter table public.matches add column if not exists court text;

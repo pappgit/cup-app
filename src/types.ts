@@ -30,7 +30,7 @@ export interface ScheduleParams {
   periodBreak: PeriodBreak;
   matchBreak: MatchBreak;
   gamesPerTeam: GamesPerTeam;
-  /** Ja = gruppeserie + tabell + sluttspill. Nei = flest mulig unike motstandere, ingen rematch. */
+  /** Sluttspill Ja = gruppeserie + tabell + sluttspill. Nei = flest mulig unike motstandere. */
   seriesPlay: boolean;
   groups?: Group[];
   cupDays: CupDays;

@@ -19,27 +19,37 @@ function ScoreInputs({
   const [h, setH] = useState(home != null ? String(home) : '');
   const [a, setA] = useState(away != null ? String(away) : '');
 
+  const sanitize = (v: string) => v.replace(/\D/g, '');
+
   return (
     <div className="result-row-scores" role="group" aria-label="Resultat">
-      <input
-        type="number"
-        min={0}
-        className="score-input"
-        value={h}
-        onChange={(e) => setH(e.target.value)}
-        onBlur={() => onSave(matchId, h, a)}
-        aria-label="Hjemmelag mål"
-      />
-      <span>–</span>
-      <input
-        type="number"
-        min={0}
-        className="score-input"
-        value={a}
-        onChange={(e) => setA(e.target.value)}
-        onBlur={() => onSave(matchId, h, a)}
-        aria-label="Bortelag mål"
-      />
+      <label className="score-field">
+        <span className="score-field-label">Hjemmelag</span>
+        <input
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          className="score-input"
+          value={h}
+          placeholder="0"
+          onChange={(e) => setH(sanitize(e.target.value))}
+          onBlur={() => onSave(matchId, h, a)}
+        />
+      </label>
+      <span className="score-separator">–</span>
+      <label className="score-field">
+        <span className="score-field-label">Bortelag</span>
+        <input
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          className="score-input"
+          value={a}
+          placeholder="0"
+          onChange={(e) => setA(sanitize(e.target.value))}
+          onBlur={() => onSave(matchId, h, a)}
+        />
+      </label>
     </div>
   );
 }
@@ -119,7 +129,7 @@ export function AdminResults() {
           Resultater
         </h2>
         <p className="page-subtitle">
-          Legg inn mål. Ved seriespill: oppdater sluttspill når gruppene er ferdige.
+          Legg inn mål for hjemme- og bortelag. Ved sluttspill: oppdater sluttspill når gruppene er ferdige.
         </p>
       </header>
 

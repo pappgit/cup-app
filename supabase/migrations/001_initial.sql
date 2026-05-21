@@ -1,4 +1,5 @@
--- Tunet Cup App – kjør i Supabase SQL Editor (eller via CLI)
+-- 001_initial.sql
+-- Tunet Cup App – grunnschema, RLS, storage, realtime
 
 -- Cup (én aktiv cup per slug, f.eks. "active")
 create table if not exists public.cups (

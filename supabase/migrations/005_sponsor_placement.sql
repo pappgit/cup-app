@@ -1,3 +1,6 @@
+-- 005_sponsor_placement.sql
+-- Sponsorplassering: forside, meny, kiosk
+
 alter table public.sponsors
   add column if not exists placement text not null default 'kiosk';
 

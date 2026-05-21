@@ -1,5 +1,5 @@
-import { Link } from 'react-router-dom';
 import { FeaturedSponsorFrame } from '../components/FeaturedSponsorFrame';
+import { HomeTeamPicker } from '../components/HomeTeamPicker';
 import { useCup } from '../hooks/useCup';
 import { normalizePageContent } from '../lib/pageContent';
 import { sponsorForPlacement } from '../lib/sponsors';
@@ -17,6 +17,8 @@ export function HomePage() {
         {content.heroSubtitle && <p>{content.heroSubtitle}</p>}
       </section>
 
+      <HomeTeamPicker />
+
       <FeaturedSponsorFrame sponsor={forsideSponsor} />
 
       <div className="card">
@@ -29,21 +31,6 @@ export function HomePage() {
           </p>
         )}
       </div>
-
-      <nav className="home-quick-links" aria-label="Snarveier">
-        <Link to="/kamper" className="home-quick-link">
-          <span className="home-quick-link-title">Kamper</span>
-          <span className="home-quick-link-desc">Kamprogram og resultater</span>
-        </Link>
-        <Link to="/tabell" className="home-quick-link">
-          <span className="home-quick-link-title">Tabell</span>
-          <span className="home-quick-link-desc">Gruppespill og poeng</span>
-        </Link>
-        <Link to="/kiosk" className="home-quick-link">
-          <span className="home-quick-link-title">Kiosk</span>
-          <span className="home-quick-link-desc">Mat og drikke</span>
-        </Link>
-      </nav>
     </>
   );
 }

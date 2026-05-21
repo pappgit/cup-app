@@ -12,6 +12,8 @@ interface ScheduleTeamFilterProps {
   label?: string;
   allOptionLabel?: string;
   id?: string;
+  /** hero = lilla ramme på forsiden */
+  variant?: 'default' | 'hero';
 }
 
 export function ScheduleTeamFilter({
@@ -22,6 +24,7 @@ export function ScheduleTeamFilter({
   label = 'Vis kamper',
   allOptionLabel = 'Hele kamprogrammet',
   id = 'schedule-team-filter',
+  variant = 'default',
 }: ScheduleTeamFilterProps) {
   const handleChange = (teamId: string) => {
     setFavoriteTeamId(teamId || null);
@@ -29,7 +32,7 @@ export function ScheduleTeamFilter({
   };
 
   return (
-    <div className="schedule-toolbar">
+    <div className={`schedule-toolbar ${variant === 'hero' ? 'schedule-toolbar--hero' : ''}`}>
       <div className="form-group schedule-toolbar-select">
         <label htmlFor={id}>{label}</label>
         <select id={id} value={value} onChange={(e) => handleChange(e.target.value)}>

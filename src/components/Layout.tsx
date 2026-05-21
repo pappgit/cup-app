@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
-import { TeamPickerBar } from './TeamPickerBar';
 import { useCup } from '../hooks/useCup';
 import { useAuth } from '../hooks/useAuth';
 
@@ -31,6 +30,7 @@ export function Layout() {
         isAdmin={isAdmin}
         sponsors={cup.sponsors}
         pageContent={cup.pageContent}
+        showStandings={Boolean(cup.scheduleParams?.seriesPlay)}
       />
       <main className={`main-content ${menuOpen ? 'menu-open' : ''}`}>
         <header className="top-bar">
@@ -54,8 +54,6 @@ export function Layout() {
         </header>
 
         {cupError && <div className="alert alert-error">{cupError}</div>}
-
-        {!pathname.startsWith('/admin') && <TeamPickerBar />}
 
         <div className="page-container">
           <Outlet context={{ menuOpen, setMenuOpen }} />

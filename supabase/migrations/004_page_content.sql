@@ -1,3 +1,6 @@
+-- 004_page_content.sql
+-- Forside-innhold, menyikoner og tema (jsonb på cups)
+
 alter table public.cups
   add column if not exists page_content jsonb;
 
