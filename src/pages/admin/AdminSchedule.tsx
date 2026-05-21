@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useCup } from '../../hooks/useCup';
 import { useCupMatches } from '../../hooks/useCupMatches';
-import type { CupDaySchedule, CupDays, ScheduleParams } from '../../types';
+import type { CupDaySchedule, ScheduleParams } from '../../types';
 import { DEFAULT_SCHEDULE_PARAMS } from '../../types';
 import {
   PLAYOFF_COURT,
@@ -20,8 +20,6 @@ import {
 } from '../../lib/scheduler';
 import {
   normalizeScheduleParams,
-  buildDays,
-  addDays,
   syncAllDaysCourtTimes,
   getActiveCourtNames,
 } from '../../lib/scheduleParams';
@@ -48,22 +46,12 @@ export function AdminSchedule() {
     setEstimate(null);
   };
 
-  const setCupDays = (cupDays: CupDays) => {
-    const days = buildDays(cupDays, params.days[0]);
-    setParams({ cupDays, days });
-  };
-
   const handleDaysChange = (days: CupDaySchedule[]) => {
     setParams({ days });
   };
 
   const handleDayDateChange = (dayIndex: number, date: string) => {
-    let days = params.days.map((d, i) => (i === dayIndex ? { ...d, date } : d));
-    if (dayIndex === 0 && params.cupDays > 1) {
-      for (let i = 1; i < days.length; i++) {
-        days[i] = { ...days[i], date: addDays(date, i) };
-      }
-    }
+    const days = params.days.map((d, i) => (i === dayIndex ? { ...d, date } : d));
     setParams({ days });
   };
 
@@ -113,11 +101,6 @@ export function AdminSchedule() {
       return;
     }
 
-    if (result.backToBackTeams > 0) {
-      setMsg('Noen lag ble satt opp med kamper for tett — prøv mer halltid.');
-      return;
-    }
-
     const matches = applyPlayoffTeamUpdates(
       result.matches,
       cup.teams,
@@ -132,7 +115,20 @@ export function AdminSchedule() {
         groups: result.groups.length > 0 ? result.groups : undefined,
       },
     });
-    setMsg(`Generert ${result.matches.length} kamper!`);
+
+    const tightNames = result.backToBackTeamIds
+      .map((id) => cup.teams.find((t) => t.id === id)?.name ?? id)
+      .join(', ');
+
+    if (result.backToBackTeams > 0) {
+      setMsg(
+        `Generert ${matches.length} kamper. Advarsel: ${result.backToBackTeams} lag har kamper med liten pause` +
+          (tightNames ? ` (${tightNames})` : '') +
+          ' — vurder mer halltid i matrisen.'
+      );
+    } else {
+      setMsg(`Generert ${matches.length} kamper!`);
+    }
     setTimeout(() => setMsg(''), 5000);
   };
 
@@ -149,22 +145,6 @@ export function AdminSchedule() {
     <>
       <div className="card" style={{ marginBottom: '1.5rem' }}>
         <h2>Parametere for kamprogram</h2>
-
-        <div className="form-group">
-          <label>Antall cup-dager</label>
-          <select
-            value={params.cupDays}
-            onChange={(e) => setCupDays(Number(e.target.value) as CupDays)}
-          >
-            <option value={1}>1 dag</option>
-            <option value={2}>2 dager</option>
-            <option value={3}>3 dager</option>
-          </select>
-          <p className="label-hint" style={{ marginTop: '0.35rem' }}>
-            Kapasitet beregnes ut fra hvilke spilleflater som er avhuket i matrisen under
-            (halltid per bane og dag).
-          </p>
-        </div>
 
         <div className="card court-matrix-card">
           <h2>Spilleflater – tilgjengelighet</h2>

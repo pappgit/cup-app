@@ -1312,10 +1312,38 @@ img {
   font-size: 0.8rem;
 }
 
+.court-matrix-day-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0 1.15rem 0.75rem;
+}
+
 .court-matrix-day-col {
   min-width: 8.5rem;
   text-align: center;
   background: var(--grey-50);
+}
+
+.court-matrix-day-head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+}
+
+.court-matrix-remove-day {
+  border: none;
+  background: transparent;
+  color: var(--grey-600);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0.15rem;
+}
+
+.court-matrix-remove-day:hover {
+  color: var(--purple-dark);
 }
 
 .court-matrix-day-label {

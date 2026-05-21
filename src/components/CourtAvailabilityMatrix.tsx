@@ -5,7 +5,12 @@ import {
   formatCupDate,
   formatTimeRange,
 } from '../lib/courtAvailability';
-import { getCourtHallTime, syncAllDaysCourtTimes } from '../lib/scheduleParams';
+import {
+  appendScheduleDay,
+  getCourtHallTime,
+  removeScheduleDay,
+  syncAllDaysCourtTimes,
+} from '../lib/scheduleParams';
 
 interface CourtAvailabilityMatrixProps {
   params: ScheduleParams;
@@ -66,9 +71,19 @@ export function CourtAvailabilityMatrix({
   return (
     <div className="court-matrix">
       <p className="court-matrix-intro">
-        Kryss av når hver hall er tilgjengelig, og sett tid. Kun avhukede felt teller ved
-        beregning og generering av kamprogram.
+        Kryss av når hver hall er tilgjengelig, sett dato og halltid per dag. Beregn og
+        kamprogram bruker kun det som er satt her – legg til eller fjern dager etter behov.
       </p>
+
+      <div className="court-matrix-day-toolbar">
+        <button
+          type="button"
+          className="btn btn-outline btn-sm"
+          onClick={() => onChange(appendScheduleDay(params.days))}
+        >
+          + Legg til dag
+        </button>
+      </div>
 
       <div className="court-matrix-scroll">
         <table className="court-matrix-table">
@@ -77,7 +92,19 @@ export function CourtAvailabilityMatrix({
               <th className="court-matrix-sticky">Spilleflate</th>
               {params.days.map((day, dayIndex) => (
                 <th key={dayIndex} className="court-matrix-day-col">
-                  <span className="court-matrix-day-label">Dag {dayIndex + 1}</span>
+                  <div className="court-matrix-day-head">
+                    <span className="court-matrix-day-label">Dag {dayIndex + 1}</span>
+                    {params.days.length > 1 && (
+                      <button
+                        type="button"
+                        className="court-matrix-remove-day"
+                        title="Fjern denne dagen"
+                        onClick={() => onChange(removeScheduleDay(params.days, dayIndex))}
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
                   <input
                     type="date"
                     className="court-matrix-date"

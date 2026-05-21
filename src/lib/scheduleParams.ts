@@ -15,13 +15,6 @@ function asCourtCount(value: unknown): CourtCount {
   return 1;
 }
 
-function asCupDays(value: unknown): CupDays {
-  const n = Number(value);
-  if (n >= 3) return 3;
-  if (n >= 2) return 2;
-  return 1;
-}
-
 function asGamesPerTeam(value: unknown): GamesPerTeam {
   const n = Number(value);
   if (n >= 7) return 7;
@@ -112,27 +105,56 @@ export function getActiveCourtNames(days: CupDaySchedule[]): string[] {
   return [...names];
 }
 
-export function buildDays(
-  cupDays: CupDays,
-  anchor?: CupDaySchedule
-): CupDaySchedule[] {
+export function createDefaultScheduleDay(anchor?: CupDaySchedule): CupDaySchedule {
   const baseDate = anchor?.date ?? DEFAULT_SCHEDULE_PARAMS.days[0].date;
   const timeFrom = anchor?.timeFrom ?? '09:00';
   const timeTo = anchor?.timeTo ?? '17:00';
 
-  return syncAllDaysCourtTimes(
-    Array.from({ length: cupDays }, (_, i) => ({
-      date: addDays(baseDate, i),
+  return syncDayCourtTimes({
+    date: baseDate,
+    timeFrom,
+    timeTo,
+    courtTimes: AVAILABLE_COURTS.map((court, idx) => ({
+      court,
       timeFrom,
       timeTo,
-      courtTimes: AVAILABLE_COURTS.map((court, idx) => ({
-        court,
-        timeFrom,
-        timeTo,
-        enabled: idx < 1,
-      })),
-    }))
-  );
+      enabled: idx < 1,
+    })),
+  });
+}
+
+/** @deprecated Bruk createDefaultScheduleDay / appendScheduleDay */
+export function buildDays(count: number, anchor?: CupDaySchedule): CupDaySchedule[] {
+  let days: CupDaySchedule[] = [];
+  for (let i = 0; i < Math.max(1, count); i++) {
+    days = days.length === 0 ? [createDefaultScheduleDay(anchor)] : appendScheduleDay(days);
+  }
+  return days;
+}
+
+export function appendScheduleDay(days: CupDaySchedule[]): CupDaySchedule[] {
+  if (days.length === 0) {
+    return [createDefaultScheduleDay()];
+  }
+  const last = days[days.length - 1];
+  const next = syncDayCourtTimes({
+    date: addDays(last.date, 1),
+    timeFrom: base.timeFrom,
+    timeTo: base.timeTo,
+    courtTimes: AVAILABLE_COURTS.map((court) => {
+      const src = getCourtHallTime(last, court);
+      return { court, timeFrom: src.timeFrom, timeTo: src.timeTo, enabled: false };
+    }),
+  });
+  return [...days, next];
+}
+
+export function removeScheduleDay(
+  days: CupDaySchedule[],
+  dayIndex: number
+): CupDaySchedule[] {
+  if (days.length <= 1) return days;
+  return days.filter((_, i) => i !== dayIndex);
 }
 
 function normalizeDay(day: CupDaySchedule): CupDaySchedule {
@@ -159,27 +181,16 @@ export function normalizeScheduleParams(
   let days = parsed.days;
   if (!days?.length) {
     const start = legacy.startDate ?? DEFAULT_SCHEDULE_PARAMS.days[0].date;
-    const cupDays = asCupDays(parsed.cupDays ?? 1);
-    days = Array.from({ length: cupDays }, (_, i) => ({
-      date: addDays(start, i),
+    days = [createDefaultScheduleDay({
+      date: start,
       timeFrom: legacy.timeFrom ?? '09:00',
       timeTo: legacy.timeTo ?? '17:00',
-    }));
-  }
-
-  const cupDays = asCupDays(parsed.cupDays ?? days.length);
-  const trimmedDays = days.slice(0, cupDays);
-  while (trimmedDays.length < cupDays) {
-    const last = trimmedDays[trimmedDays.length - 1] ?? days[0];
-    trimmedDays.push({
-      date: addDays(last.date, 1),
-      timeFrom: last.timeFrom,
-      timeTo: last.timeTo,
-    });
+    })];
   }
 
   const legacyCourts = parsed.courts?.length ? parsed.courts : [];
-  let normalizedDays = trimmedDays.map((d) => normalizeDay(d));
+  let normalizedDays = days.map((d) => normalizeDay(d));
+  const cupDays = normalizedDays.length;
 
   const needsLegacyCourts = normalizedDays.every(
     (d) => !d.courtTimes?.length || d.courtTimes.every((c) => c.enabled !== true)

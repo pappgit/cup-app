@@ -307,17 +307,58 @@ export function minTimeSlicesNeeded(teamCount: number, matchCount: number): numb
   return Math.ceil(matchCount / Math.max(1, Math.floor(teamCount / 2)));
 }
 
-function canPlayInSlice(teamId: string, sliceIndex: number, lastSlice: Map<string, number>): boolean {
-  const last = lastSlice.get(teamId);
+/** Minst én tidsluft (én bølge pause) mellom kamper for samme lag. */
+export const MIN_WAVE_GAP = 2;
+
+function canPlayInWave(teamId: string, waveIndex: number, lastWave: Map<string, number>): boolean {
+  const last = lastWave.get(teamId);
   if (last === undefined) return true;
-  return sliceIndex - last >= 2;
+  return waveIndex - last >= MIN_WAVE_GAP;
 }
 
-function findPairingForSlice(
+function buildTimeToWave(slots: ScheduleSlot[]): Map<number, number> {
+  const map = new Map<number, number>();
+  for (const s of slots) {
+    map.set(s.start.getTime(), s.waveIndex);
+  }
+  return map;
+}
+
+function buildTimeToWaveFromMatches(matches: Match[]): Map<number, number> {
+  const times = [...new Set(matches.map((m) => new Date(m.startTime).getTime()))].sort(
+    (a, b) => a - b
+  );
+  const map = new Map<number, number>();
+  let wave = 0;
+  let last = -1;
+  for (const t of times) {
+    if (last >= 0 && t !== last) wave++;
+    map.set(t, wave);
+    last = t;
+  }
+  return map;
+}
+
+function lastWaveFromMatches(
+  matches: Match[],
+  timeToWave: Map<number, number>
+): Map<string, number> {
+  const map = new Map<string, number>();
+  for (const m of matches) {
+    const wave = timeToWave.get(new Date(m.startTime).getTime()) ?? 0;
+    for (const id of [m.homeTeamId, m.awayTeamId]) {
+      const prev = map.get(id);
+      if (prev === undefined || wave > prev) map.set(id, wave);
+    }
+  }
+  return map;
+}
+
+function findPairingForWave(
   remaining: Pairing[],
-  sliceIndex: number,
+  waveIndex: number,
   busyTeams: Set<string>,
-  lastSlice: Map<string, number>,
+  lastWave: Map<string, number>,
   gamesScheduled: Map<string, number>
 ): number {
   let bestIdx = -1;
@@ -326,8 +367,8 @@ function findPairingForSlice(
   for (let i = 0; i < remaining.length; i++) {
     const p = remaining[i];
     if (busyTeams.has(p.home) || busyTeams.has(p.away)) continue;
-    if (!canPlayInSlice(p.home, sliceIndex, lastSlice)) continue;
-    if (!canPlayInSlice(p.away, sliceIndex, lastSlice)) continue;
+    if (!canPlayInWave(p.home, waveIndex, lastWave)) continue;
+    if (!canPlayInWave(p.away, waveIndex, lastWave)) continue;
 
     const score =
       (gamesScheduled.get(p.home) ?? 0) + (gamesScheduled.get(p.away) ?? 0);
@@ -340,29 +381,42 @@ function findPairingForSlice(
   return bestIdx;
 }
 
-function detectBackToBack(matches: Match[], params: ScheduleParams): string[] {
-  const slotMs = slotDurationMinutes(params) * 60_000;
+/** Lag med for tette kamper (samme regel som ved planlegging: minst MIN_WAVE_GAP bølger mellom). */
+export function detectBackToBackTeamIds(
+  matches: Match[],
+  timeToWave: Map<number, number>
+): string[] {
   const byTeam = new Map<string, number[]>();
 
   for (const m of matches) {
     const t = new Date(m.startTime).getTime();
+    const wave = timeToWave.get(t) ?? 0;
     for (const id of [m.homeTeamId, m.awayTeamId]) {
       if (!byTeam.has(id)) byTeam.set(id, []);
-      byTeam.get(id)!.push(t);
+      byTeam.get(id)!.push(wave);
     }
   }
 
   const problems: string[] = [];
-  for (const [teamId, times] of byTeam) {
-    times.sort((a, b) => a - b);
-    for (let i = 1; i < times.length; i++) {
-      if (times[i] - times[i - 1] < slotMs * 1.8) {
+  for (const [teamId, waves] of byTeam) {
+    waves.sort((a, b) => a - b);
+    for (let i = 1; i < waves.length; i++) {
+      if (waves[i] - waves[i - 1] < MIN_WAVE_GAP) {
         problems.push(teamId);
         break;
       }
     }
   }
   return problems;
+}
+
+function shufflePairings<T>(items: T[]): T[] {
+  const arr = [...items];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
 }
 
 export interface ScheduleValidation {
@@ -604,6 +658,8 @@ export interface ScheduleResult {
   unscheduled: number;
   pairingsCount: number;
   backToBackTeams: number;
+  /** Lag-ID-er som fortsatt har kamper for tett etter omrokering */
+  backToBackTeamIds: string[];
 }
 
 export function generateSchedule(teams: Team[], rawParams: ScheduleParams): Match[] {
@@ -640,7 +696,9 @@ function schedulePairingsOnSlots(
   teams: Team[],
   params: ScheduleParams,
   matches: Match[],
-  startRound: number
+  startRound: number,
+  initialLastWave?: Map<string, number>,
+  initialGamesScheduled?: Map<string, number>
 ): { scheduled: number; remaining: Pairing[] } {
   if (pairings.length === 0 || slots.length === 0) {
     return { scheduled: 0, remaining: [...pairings] };
@@ -656,7 +714,7 @@ function schedulePairingsOnSlots(
         matches.push(
           pairingToMatch(p, formatTime(slot.start), slot.court, startRound + count)
         );
-        slotIdx += 2;
+        slotIdx += MIN_WAVE_GAP;
         count++;
         break;
       }
@@ -667,9 +725,11 @@ function schedulePairingsOnSlots(
   const remaining = [...pairings];
   let wave = -1;
   const busyTeams = new Set<string>();
-  const lastSlice = new Map<string, number>();
-  const gamesScheduled = new Map<string, number>();
-  teams.forEach((t) => gamesScheduled.set(t.id, 0));
+  const lastWave = new Map(initialLastWave);
+  const gamesScheduled = new Map(initialGamesScheduled);
+  teams.forEach((t) => {
+    if (!gamesScheduled.has(t.id)) gamesScheduled.set(t.id, 0);
+  });
 
   let scheduled = 0;
   const baseCount = matches.length;
@@ -682,11 +742,11 @@ function schedulePairingsOnSlots(
       busyTeams.clear();
     }
 
-    const idx = findPairingForSlice(
+    const idx = findPairingForWave(
       remaining,
       slot.waveIndex,
       busyTeams,
-      lastSlice,
+      lastWave,
       gamesScheduled
     );
     if (idx === -1) continue;
@@ -695,8 +755,8 @@ function schedulePairingsOnSlots(
     busyTeams.add(p.home);
     busyTeams.add(p.away);
 
-    lastSlice.set(p.home, slot.waveIndex);
-    lastSlice.set(p.away, slot.waveIndex);
+    lastWave.set(p.home, slot.waveIndex);
+    lastWave.set(p.away, slot.waveIndex);
     gamesScheduled.set(p.home, (gamesScheduled.get(p.home) ?? 0) + 1);
     gamesScheduled.set(p.away, (gamesScheduled.get(p.away) ?? 0) + 1);
 
@@ -715,21 +775,21 @@ function schedulePairingsOnSlots(
   return { scheduled, remaining };
 }
 
-/** Legg inn sluttspillkamper som ikke fikk plass i matrisen (tid rett etter gruppespill). */
-function appendUnscheduledPlayoffMatches(
-  remaining: Pairing[],
-  matches: Match[],
+/** Ekstra Høyenhallen-slots med MIN_WAVE_GAP mellom bølger når matrisen er full. */
+function buildFallbackPlayoffSlots(
+  count: number,
   notBefore: Date | undefined,
-  params: ScheduleParams
-): void {
-  if (remaining.length === 0) return;
+  params: ScheduleParams,
+  existingSlots: ScheduleSlot[]
+): ScheduleSlot[] {
+  if (count === 0) return [];
 
   const slotMs = slotDurationMinutes(params) * 60_000;
   let cursor = notBefore?.getTime() ?? 0;
 
-  if (cursor === 0 && matches.length > 0) {
-    cursor =
-      Math.max(...matches.map((m) => new Date(m.startTime).getTime())) + slotMs;
+  if (cursor === 0 && existingSlots.length > 0) {
+    const last = existingSlots[existingSlots.length - 1];
+    cursor = last.start.getTime() + slotMs * MIN_WAVE_GAP;
   }
   if (cursor === 0) {
     const firstDay = params.days[0]?.date ?? '2026-06-01';
@@ -737,12 +797,142 @@ function appendUnscheduledPlayoffMatches(
     cursor = new Date(y, mo - 1, d, 17, 0).getTime();
   }
 
-  for (const p of remaining) {
-    matches.push(
-      pairingToMatch(p, formatTime(new Date(cursor)), PLAYOFF_COURT, matches.length + 1)
-    );
-    cursor += slotMs;
+  let wave =
+    existingSlots.length > 0
+      ? existingSlots[existingSlots.length - 1].waveIndex + MIN_WAVE_GAP
+      : 0;
+
+  const slots: ScheduleSlot[] = [];
+  for (let i = 0; i < count; i++) {
+    slots.push({
+      start: new Date(cursor),
+      court: PLAYOFF_COURT,
+      waveIndex: wave,
+    });
+    cursor += slotMs * MIN_WAVE_GAP;
+    wave += MIN_WAVE_GAP;
   }
+  return slots;
+}
+
+function runFullSchedule(
+  pairings: Pairing[],
+  allSlots: ScheduleSlot[],
+  teams: Team[],
+  params: ScheduleParams
+): { matches: Match[]; unscheduled: number } {
+  const { group: groupPairings, playoff: playoffPairings } = splitPairingsByPhase(pairings);
+  const matches: Match[] = [];
+
+  const groupResult = schedulePairingsOnSlots(
+    groupPairings,
+    allSlots,
+    teams,
+    params,
+    matches,
+    1
+  );
+
+  const groupTimeToWave =
+    matches.length > 0
+      ? buildTimeToWaveFromMatches(matches)
+      : buildTimeToWave(allSlots);
+  const lastWave = lastWaveFromMatches(matches, groupTimeToWave);
+  const gamesScheduled = countGamesPerTeam(
+    matches.map((m) => ({
+      home: m.homeTeamId,
+      away: m.awayTeamId,
+    })),
+    teams
+  );
+
+  let notBefore: Date | undefined;
+  const matchDurMs = matchDurationMinutes(params) * 60_000;
+  for (const m of matches) {
+    if (m.phase !== 'group') continue;
+    const end = new Date(m.startTime).getTime() + matchDurMs;
+    if (!notBefore || end > notBefore.getTime()) {
+      notBefore = new Date(end);
+    }
+  }
+
+  let playoffSlotList = playoffSlotsFrom(allSlots, notBefore);
+  const playoffResult = schedulePairingsOnSlots(
+    playoffPairings,
+    playoffSlotList,
+    teams,
+    params,
+    matches,
+    matches.length + 1,
+    lastWave,
+    gamesScheduled
+  );
+
+  if (playoffResult.remaining.length > 0) {
+    const fallback = buildFallbackPlayoffSlots(
+      playoffResult.remaining.length,
+      notBefore,
+      params,
+      [...allSlots, ...playoffSlotList]
+    );
+    const waveMap = buildTimeToWaveFromMatches(matches);
+    schedulePairingsOnSlots(
+      playoffResult.remaining,
+      fallback,
+      teams,
+      params,
+      matches,
+      matches.length + 1,
+      lastWaveFromMatches(matches, waveMap),
+      countGamesPerTeam(
+        matches.map((m) => ({ home: m.homeTeamId, away: m.awayTeamId })),
+        teams
+      )
+    );
+  }
+
+  return {
+    matches,
+    unscheduled: Math.max(0, pairings.length - matches.length),
+  };
+}
+
+/** Prøv flere rekkefølger på kamper for å unngå back-to-back. */
+function optimizeScheduleOrder(
+  pairings: Pairing[],
+  allSlots: ScheduleSlot[],
+  teams: Team[],
+  params: ScheduleParams
+): { matches: Match[]; unscheduled: number; backToBackTeamIds: string[] } {
+  const attempts = Math.min(40, Math.max(10, pairings.length * 2));
+  let bestMatches: Match[] = [];
+  let bestUnscheduled = pairings.length;
+  let bestProblemCount = Infinity;
+
+  for (let i = 0; i < attempts; i++) {
+    const ordered = i === 0 ? pairings : shufflePairings(pairings);
+    const { matches, unscheduled } = runFullSchedule(ordered, allSlots, teams, params);
+    const timeToWave = buildTimeToWaveFromMatches(matches);
+    const problems = detectBackToBackTeamIds(matches, timeToWave);
+
+    const better =
+      problems.length < bestProblemCount ||
+      (problems.length === bestProblemCount && unscheduled < bestUnscheduled);
+
+    if (better) {
+      bestMatches = matches;
+      bestUnscheduled = unscheduled;
+      bestProblemCount = problems.length;
+      if (problems.length === 0 && unscheduled === 0) break;
+    }
+  }
+
+  const timeToWave = buildTimeToWaveFromMatches(bestMatches);
+  return {
+    matches: bestMatches,
+    unscheduled: bestUnscheduled,
+    backToBackTeamIds: detectBackToBackTeamIds(bestMatches, timeToWave),
+  };
 }
 
 export function generateScheduleWithMeta(
@@ -773,58 +963,24 @@ export function generateScheduleWithMeta(
       unscheduled: pairings.length,
       pairingsCount: pairings.length,
       backToBackTeams: 0,
+      backToBackTeamIds: [],
       groups,
     };
   }
 
-  const { group: groupPairings, playoff: playoffPairings } = splitPairingsByPhase(pairings);
-  const matches: Match[] = [];
-
-  const groupResult = schedulePairingsOnSlots(
-    groupPairings,
+  const { matches, unscheduled, backToBackTeamIds } = optimizeScheduleOrder(
+    pairings,
     allSlots,
     teams,
-    params,
-    matches,
-    1
-  );
-
-  let notBefore: Date | undefined;
-  const matchDurMs = matchDurationMinutes(params) * 60_000;
-  for (const m of matches) {
-    if (m.phase !== 'group') continue;
-    const end = new Date(m.startTime).getTime() + matchDurMs;
-    if (!notBefore || end > notBefore.getTime()) {
-      notBefore = new Date(end);
-    }
-  }
-
-  const playoffSlotList = playoffSlotsFrom(allSlots, notBefore);
-  const playoffResult = schedulePairingsOnSlots(
-    playoffPairings,
-    playoffSlotList,
-    teams,
-    params,
-    matches,
-    matches.length + 1
-  );
-
-  appendUnscheduledPlayoffMatches(
-    playoffResult.remaining,
-    matches,
-    notBefore,
     params
   );
-
-  const unscheduled = groupResult.remaining.length;
-
-  const backToBack = detectBackToBack(matches, params);
 
   return {
     matches,
     unscheduled,
     pairingsCount: pairings.length,
-    backToBackTeams: backToBack.length,
+    backToBackTeams: backToBackTeamIds.length,
+    backToBackTeamIds,
     groups,
   };
 }
