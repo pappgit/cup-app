@@ -327,6 +327,21 @@ export async function persistCup(data: CupData, cupId?: string): Promise<string>
   return id;
 }
 
+export async function uploadSidebarLogo(cupId: string, file: File): Promise<string> {
+  const client = requireClient();
+  const ext = file.name.split('.').pop() || 'png';
+  const path = `${cupId}/sidebar-logo.${ext}`;
+
+  const { error: uploadError } = await client.storage
+    .from('sponsors')
+    .upload(path, file, { upsert: true, contentType: file.type });
+
+  if (uploadError) throw uploadError;
+
+  const { data } = client.storage.from('sponsors').getPublicUrl(path);
+  return data.publicUrl;
+}
+
 export async function uploadFeaturedSponsorLogo(cupId: string, file: File): Promise<string> {
   const client = requireClient();
   const ext = file.name.split('.').pop() || 'png';

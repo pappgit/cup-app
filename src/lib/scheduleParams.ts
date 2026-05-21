@@ -1,4 +1,11 @@
-import type { CupDaySchedule, CourtCount, CupDays, GamesPerTeam, ScheduleParams } from '../types';
+import type {
+  CourtHallTime,
+  CupDaySchedule,
+  CourtCount,
+  CupDays,
+  GamesPerTeam,
+  ScheduleParams,
+} from '../types';
 import { AVAILABLE_COURTS, DEFAULT_SCHEDULE_PARAMS } from '../types';
 
 function asCourtCount(value: unknown): CourtCount {
@@ -49,6 +56,41 @@ export function defaultCourts(count: CourtCount): string[] {
   return [...AVAILABLE_COURTS].slice(0, count);
 }
 
+export function getCourtHallTime(day: CupDaySchedule, court: string): CourtHallTime {
+  const found = day.courtTimes?.find((c) => c.court === court);
+  if (found) return found;
+  return {
+    court,
+    timeFrom: day.timeFrom ?? '09:00',
+    timeTo: day.timeTo ?? '17:00',
+  };
+}
+
+export function syncDayCourtTimes(
+  day: CupDaySchedule,
+  courts: string[]
+): CupDaySchedule {
+  const existing = day.courtTimes ?? [];
+  const courtTimes = courts.map((court) => {
+    const prev = existing.find((c) => c.court === court);
+    return (
+      prev ?? {
+        court,
+        timeFrom: day.timeFrom ?? '09:00',
+        timeTo: day.timeTo ?? '17:00',
+      }
+    );
+  });
+  return { ...day, courtTimes };
+}
+
+export function syncAllDaysCourtTimes(
+  days: CupDaySchedule[],
+  courts: string[]
+): CupDaySchedule[] {
+  return days.map((d) => syncDayCourtTimes(d, courts));
+}
+
 export function buildDays(
   cupDays: CupDays,
   anchor?: CupDaySchedule
@@ -61,7 +103,14 @@ export function buildDays(
     date: addDays(baseDate, i),
     timeFrom,
     timeTo,
+    courtTimes: [],
   }));
+}
+
+function normalizeDay(day: CupDaySchedule, courts: string[]): CupDaySchedule {
+  const timeFrom = day.timeFrom ?? '09:00';
+  const timeTo = day.timeTo ?? '17:00';
+  return syncDayCourtTimes({ ...day, timeFrom, timeTo }, courts);
 }
 
 /** Støtt gamle lagrede parametere (enkelt startdato/tid). */
@@ -105,6 +154,8 @@ export function normalizeScheduleParams(
     courts = defaultCourts(courtCount);
   }
 
+  const normalizedDays = trimmedDays.map((d) => normalizeDay(d, courts));
+
   return {
     matchFormat: parsed.matchFormat ?? DEFAULT_SCHEDULE_PARAMS.matchFormat,
     periodBreak: Number(parsed.periodBreak) === 10 ? 10 : 5,
@@ -115,7 +166,7 @@ export function normalizeScheduleParams(
     seriesPlay: Boolean(parsed.seriesPlay),
     groups: parsed.groups,
     cupDays,
-    days: trimmedDays,
+    days: normalizedDays,
     courtCount,
     courts,
   };

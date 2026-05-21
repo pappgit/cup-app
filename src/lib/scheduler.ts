@@ -1,6 +1,6 @@
 import type { Group, Match, MatchPhase, ScheduleParams, Team } from '../types';
 import { generateSeriesPairings } from './groups';
-import { normalizeScheduleParams } from './scheduleParams';
+import { getCourtHallTime, normalizeScheduleParams } from './scheduleParams';
 
 function matchDurationMinutes(params: ScheduleParams): number {
   const [periods, periodMin] = params.matchFormat.split('x').map(Number);
@@ -23,34 +23,56 @@ function formatTime(d: Date): string {
   return d.toISOString();
 }
 
-interface TimeSlice {
+interface ScheduleSlot {
   start: Date;
+  court: string;
+  waveIndex: number;
 }
 
-function buildTimeSlices(params: ScheduleParams): TimeSlice[] {
+function buildScheduleSlots(params: ScheduleParams): ScheduleSlot[] {
   const p = normalizeScheduleParams(params);
   const slotMin = slotDurationMinutes(p);
   const matchDur = matchDurationMinutes(p);
-  const slices: TimeSlice[] = [];
+  const raw: { start: Date; court: string }[] = [];
 
   for (const day of p.days) {
-    let current = parseTime(day.date, day.timeFrom);
-    const dayEnd = parseTime(day.date, day.timeTo);
+    for (const court of p.courts) {
+      const hall = getCourtHallTime(day, court);
+      let current = parseTime(day.date, hall.timeFrom);
+      const dayEnd = parseTime(day.date, hall.timeTo);
 
-    if (dayEnd.getTime() <= current.getTime()) continue;
+      if (dayEnd.getTime() <= current.getTime()) continue;
 
-    while (current.getTime() + matchDur * 60_000 <= dayEnd.getTime()) {
-      slices.push({ start: new Date(current) });
-      current = new Date(current.getTime() + slotMin * 60_000);
+      while (current.getTime() + matchDur * 60_000 <= dayEnd.getTime()) {
+        raw.push({ start: new Date(current), court });
+        current = new Date(current.getTime() + slotMin * 60_000);
+      }
     }
   }
 
-  return slices;
+  raw.sort((a, b) => a.start.getTime() - b.start.getTime() || a.court.localeCompare(b.court));
+
+  const slots: ScheduleSlot[] = [];
+  let waveIndex = 0;
+  let lastStart = -1;
+
+  for (const r of raw) {
+    const t = r.start.getTime();
+    if (lastStart >= 0 && t !== lastStart) waveIndex++;
+    lastStart = t;
+    slots.push({ start: r.start, court: r.court, waveIndex });
+  }
+
+  return slots;
+}
+
+function countTimeWaves(slots: ScheduleSlot[]): number {
+  if (slots.length === 0) return 0;
+  return slots[slots.length - 1].waveIndex + 1;
 }
 
 export function countScheduleSlots(params: ScheduleParams): number {
-  const p = normalizeScheduleParams(params);
-  return buildTimeSlices(p).length * p.courtCount;
+  return buildScheduleSlots(normalizeScheduleParams(params)).length;
 }
 
 type Pairing = {
@@ -328,6 +350,62 @@ export interface ScheduleValidation {
   gamesPerTeam: number;
 }
 
+export interface ScheduleEstimate {
+  validation: ScheduleValidation;
+  matchesNeeded: number;
+  slotsAvailable: number;
+  timeWaves: number;
+  slotMinutes: number;
+  fits: boolean;
+  summaryLines: string[];
+}
+
+/** Forhåndsberegning (Admin «Beregn») – uten å generere kamper. */
+export function calculateScheduleEstimate(
+  teams: Team[],
+  rawParams: ScheduleParams
+): ScheduleEstimate {
+  const params = normalizeScheduleParams(rawParams);
+  const validation = validateSchedule(teams, params);
+  const slots = buildScheduleSlots(params);
+  const timeWaves = countTimeWaves(slots);
+  const matchesNeeded = validation.pairingsCount;
+  const slotsAvailable = slots.length;
+  const slotMinutes = slotDurationMinutes(params);
+
+  const summaryLines: string[] = [];
+
+  if (teams.length < 2) {
+    summaryLines.push('Legg inn minst 2 lag før beregning.');
+  } else {
+    summaryLines.push(
+      `${matchesNeeded} kamper trengs med valgt oppsett (${teams.length} lag).`
+    );
+    summaryLines.push(
+      `${slotsAvailable} kampplasser tilgjengelig (${timeWaves} tidsrunder, ca. ${slotMinutes} min per kamp inkl. pause).`
+    );
+    if (slotsAvailable >= matchesNeeded && validation.ok) {
+      summaryLines.push('Oppsettet ser ut til å ha nok tid og plasser til alle kamper.');
+    } else if (slotsAvailable >= matchesNeeded) {
+      summaryLines.push('Nok plasser, men sjekk advarsler under.');
+    } else {
+      summaryLines.push(
+        `Mangler ${matchesNeeded - slotsAvailable} kampplasser – leng halltid, flere baner eller flere dager.`
+      );
+    }
+  }
+
+  return {
+    validation,
+    matchesNeeded,
+    slotsAvailable,
+    timeWaves,
+    slotMinutes,
+    fits: slotsAvailable >= matchesNeeded && validation.ok,
+    summaryLines,
+  };
+}
+
 export function validateSchedule(teams: Team[], rawParams: ScheduleParams): ScheduleValidation {
   const params = normalizeScheduleParams(rawParams);
   const errors: string[] = [];
@@ -363,13 +441,13 @@ export function validateSchedule(teams: Team[], rawParams: ScheduleParams): Sche
     );
   }
 
-  const slices = buildTimeSlices(params);
-  const timeSlicesCount = slices.length;
-  const slotsCount = timeSlicesCount * params.courtCount;
+  const slots = buildScheduleSlots(params);
+  const slotsCount = slots.length;
+  const timeSlicesCount = countTimeWaves(slots);
 
-  if (timeSlicesCount === 0) {
+  if (slotsCount === 0) {
     errors.push(
-      'Ingen halltid funnet. Sjekk at «tid til» er etter «tid fra» på hver cup-dag.'
+      'Ingen halltid funnet. Sjekk tid fra–til for hver valgt bane på cup-dagene.'
     );
   }
 
@@ -408,13 +486,18 @@ export function validateSchedule(teams: Team[], rawParams: ScheduleParams): Sche
     errors.push('Kunne ikke lage kamper med valgte innstillinger.');
   }
 
-  const slicesNeeded = minTimeSlicesNeeded(teams.length, pairings.length);
-  if (timeSlicesCount > 0 && timeSlicesCount < slicesNeeded) {
+  if (slotsCount > 0 && slotsCount < pairings.length) {
     errors.push(
-      `Ikke nok tid: minst ca. ${slicesNeeded} tidslufter trengs (${pairings.length} kamper, ` +
-        `${teams.length} lag, pause mellom hver kamp for samme lag). ` +
-        `Dere har ${timeSlicesCount} tidslufter (${slotsCount} kampplasser). ` +
-        `Legg til flere dager, lengre halltid eller flere baner.`
+      `Ikke nok kampplasser: ${pairings.length} kamper trengs, men oppsettet gir ${slotsCount} plasser. ` +
+        `Legg til flere dager, lengre halltid per bane eller flere baner.`
+    );
+  }
+
+  const wavesNeeded = minTimeSlicesNeeded(teams.length, pairings.length);
+  if (timeSlicesCount > 0 && timeSlicesCount < wavesNeeded) {
+    errors.push(
+      `Ikke nok tidslufter for pauser: minst ca. ${wavesNeeded} runder trengs (${pairings.length} kamper, ` +
+        `${teams.length} lag). Dere har ${timeSlicesCount} runder med kamper.`
     );
   }
 
@@ -482,10 +565,9 @@ export function generateScheduleWithMeta(
     (a, b) =>
       (phaseOrder[a.phase ?? 'friendly'] ?? 0) - (phaseOrder[b.phase ?? 'friendly'] ?? 0)
   );
-  const slices = buildTimeSlices(params);
-  const courts = params.courts.slice(0, params.courtCount);
+  const slots = buildScheduleSlots(params);
 
-  if (pairings.length === 0 || slices.length === 0) {
+  if (pairings.length === 0 || slots.length === 0) {
     return {
       matches: [],
       unscheduled: pairings.length,
@@ -503,18 +585,14 @@ export function generateScheduleWithMeta(
 
   // To lag: én kamp per annen tidsluft (ingen back-to-back)
   if (teams.length === 2) {
-    let sliceIndex = 0;
+    let slotIdx = 0;
     for (const p of remaining) {
-      while (sliceIndex < slices.length && matches.length < pairings.length) {
+      while (slotIdx < slots.length && matches.length < pairings.length) {
+        const slot = slots[slotIdx];
         matches.push(
-          pairingToMatch(
-            p,
-            formatTime(slices[sliceIndex].start),
-            courts[matches.length % courts.length],
-            matches.length + 1
-          )
+          pairingToMatch(p, formatTime(slot.start), slot.court, matches.length + 1)
         );
-        sliceIndex += 2;
+        slotIdx += 2;
         break;
       }
     }
@@ -527,40 +605,43 @@ export function generateScheduleWithMeta(
     };
   }
 
-  for (let sliceIndex = 0; sliceIndex < slices.length && remaining.length > 0; sliceIndex++) {
-    const slice = slices[sliceIndex];
-    const busyTeams = new Set<string>();
+  let wave = -1;
+  const busyTeams = new Set<string>();
 
-    for (const court of courts) {
-      if (remaining.length === 0) break;
+  for (const slot of slots) {
+    if (remaining.length === 0) break;
 
-      const idx = findPairingForSlice(
-        remaining,
-        sliceIndex,
-        busyTeams,
-        lastSlice,
-        gamesScheduled
-      );
-      if (idx === -1) continue;
-
-      const p = remaining.splice(idx, 1)[0];
-      busyTeams.add(p.home);
-      busyTeams.add(p.away);
-
-      lastSlice.set(p.home, sliceIndex);
-      lastSlice.set(p.away, sliceIndex);
-      gamesScheduled.set(p.home, (gamesScheduled.get(p.home) ?? 0) + 1);
-      gamesScheduled.set(p.away, (gamesScheduled.get(p.away) ?? 0) + 1);
-
-      matches.push(
-        pairingToMatch(
-          p,
-          formatTime(slice.start),
-          court,
-          Math.floor(matches.length / Math.max(1, Math.floor(teams.length / 2))) + 1
-        )
-      );
+    if (slot.waveIndex !== wave) {
+      wave = slot.waveIndex;
+      busyTeams.clear();
     }
+
+    const idx = findPairingForSlice(
+      remaining,
+      slot.waveIndex,
+      busyTeams,
+      lastSlice,
+      gamesScheduled
+    );
+    if (idx === -1) continue;
+
+    const p = remaining.splice(idx, 1)[0];
+    busyTeams.add(p.home);
+    busyTeams.add(p.away);
+
+    lastSlice.set(p.home, slot.waveIndex);
+    lastSlice.set(p.away, slot.waveIndex);
+    gamesScheduled.set(p.home, (gamesScheduled.get(p.home) ?? 0) + 1);
+    gamesScheduled.set(p.away, (gamesScheduled.get(p.away) ?? 0) + 1);
+
+    matches.push(
+      pairingToMatch(
+        p,
+        formatTime(slot.start),
+        slot.court,
+        Math.floor(matches.length / Math.max(1, Math.floor(teams.length / 2))) + 1
+      )
+    );
   }
 
   const backToBack = detectBackToBack(matches, params);

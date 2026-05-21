@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
+import { ClubLogo } from './ClubLogo';
 import { useCup } from '../hooks/useCup';
 import { useAuth } from '../hooks/useAuth';
 
@@ -16,8 +17,6 @@ export function Layout() {
   const { cup, error: cupError } = useCup();
   const { isAdmin } = useAuth();
   const { pathname } = useLocation();
-  const base = import.meta.env.BASE_URL;
-
   const pageTitle =
     pathname.startsWith('/admin') ? 'Admin' : PAGE_TITLES[pathname] ?? cup.name;
 
@@ -45,7 +44,7 @@ export function Layout() {
             </svg>
           </button>
           <div className="top-bar-brand">
-            <img src={`${base}tunet-logo.png`} alt="" className="top-bar-logo" />
+            <ClubLogo pageContent={cup.pageContent} className="top-bar-logo" alt="" />
             <div className="top-bar-text">
               <span className="top-bar-cup">{cup.name}</span>
               <span className="top-bar-page">{pageTitle}</span>

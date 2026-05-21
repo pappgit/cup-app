@@ -1,7 +1,7 @@
 import { normalizeNavItems } from './navConfig';
 import { normalizeTheme } from './theme';
 import type { PageContent } from '../types';
-import { DEFAULT_PAGE_CONTENT } from '../types';
+import { DEFAULT_PAGE_CONTENT, DEFAULT_SIDEBAR_LOGO } from '../types';
 
 export function resolveAssetUrl(path: string): string {
   if (!path) return '';
@@ -25,7 +25,15 @@ export function normalizePageContent(raw: PageContent | null | undefined): PageC
       typeof raw.participantInfo === 'string'
         ? raw.participantInfo
         : DEFAULT_PAGE_CONTENT.participantInfo,
+    sidebarLogoUrl:
+      typeof raw.sidebarLogoUrl === 'string' && raw.sidebarLogoUrl.trim()
+        ? raw.sidebarLogoUrl.trim()
+        : DEFAULT_SIDEBAR_LOGO,
     navItems: normalizeNavItems(raw.navItems),
     theme: normalizeTheme(raw.theme),
   };
+}
+
+export function getSidebarLogoUrl(content: PageContent): string {
+  return resolveAssetUrl(content.sidebarLogoUrl || DEFAULT_SIDEBAR_LOGO);
 }

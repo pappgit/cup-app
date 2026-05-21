@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom';
 import { normalizePageContent } from '../lib/pageContent';
 import { normalizeNavItems } from '../lib/navConfig';
 import { DEFAULT_PAGE_CONTENT } from '../types';
+import { ClubLogo } from './ClubLogo';
 import { SidebarSponsor } from './SidebarSponsor';
 import type { Sponsor } from '../types';
 
@@ -25,7 +26,6 @@ export function Sidebar({
   pageContent,
   showStandings = false,
 }: SidebarProps) {
-  const base = import.meta.env.BASE_URL;
   const content = normalizePageContent(pageContent ?? DEFAULT_PAGE_CONTENT);
   const navItems = normalizeNavItems(content.navItems).filter(
     (item) => item.path !== '/tabell' || showStandings
@@ -40,7 +40,7 @@ export function Sidebar({
       />
       <aside className={`sidebar ${open ? 'open' : ''}`} aria-label="Hovedmeny">
         <div className="sidebar-header">
-          <img src={`${base}tunet-logo.png`} alt="Tunet" className="sidebar-logo" />
+          <ClubLogo pageContent={content} className="sidebar-logo" alt={cupName} />
           <div>
             <div className="sidebar-title">{cupName}</div>
             <div className="sidebar-tagline">Innebandy cup</div>

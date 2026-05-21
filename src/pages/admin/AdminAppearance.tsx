@@ -1,14 +1,23 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useCup } from '../../hooks/useCup';
-import { normalizePageContent } from '../../lib/pageContent';
+import { uploadSidebarLogo, persistCup } from '../../lib/cupApi';
+import { getSidebarLogoUrl, normalizePageContent } from '../../lib/pageContent';
 import { normalizeNavItems } from '../../lib/navConfig';
 import { applyTheme, normalizeTheme } from '../../lib/theme';
-import { DEFAULT_NAV_ITEMS, DEFAULT_PAGE_CONTENT, DEFAULT_THEME } from '../../types';
+import {
+  DEFAULT_NAV_ITEMS,
+  DEFAULT_PAGE_CONTENT,
+  DEFAULT_SIDEBAR_LOGO,
+  DEFAULT_THEME,
+} from '../../types';
+import { ClubLogo } from '../../components/ClubLogo';
 import type { AppTheme, NavItemConfig, PageContent } from '../../types';
 
 export function AdminAppearance() {
-  const { cup, update } = useCup();
+  const { cup, cupId, update } = useCup();
   const content = normalizePageContent(cup.pageContent ?? DEFAULT_PAGE_CONTENT);
+  const logoRef = useRef<HTMLInputElement>(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
   const [msg, setMsg] = useState('');
   const [navDraft, setNavDraft] = useState<NavItemConfig[]>(content.navItems);
   const [themeDraft, setThemeDraft] = useState<AppTheme>(content.theme);
@@ -31,13 +40,82 @@ export function AdminAppearance() {
 
   const resetNav = () => setNavDraft([...DEFAULT_NAV_ITEMS]);
 
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingLogo(true);
+    setMsg('');
+    try {
+      const effectiveCupId = cupId || (await persistCup(cup));
+      const logoUrl = await uploadSidebarLogo(effectiveCupId, file);
+      await save({ sidebarLogoUrl: logoUrl });
+      setMsg('Logo oppdatert!');
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : 'Opplasting feilet');
+    } finally {
+      setUploadingLogo(false);
+      e.target.value = '';
+    }
+  };
+
+  const resetLogo = () => save({ sidebarLogoUrl: DEFAULT_SIDEBAR_LOGO });
+
   return (
     <>
       <h1 className="page-title" style={{ marginBottom: '1rem' }}>
         Utseende
       </h1>
 
-      {msg && <div className="alert alert-success">{msg}</div>}
+      {msg && (
+        <div
+          className={`alert ${
+            msg.includes('feilet') ? 'alert-error' : 'alert-success'
+          }`}
+        >
+          {msg}
+        </div>
+      )}
+
+      <div className="card" style={{ marginBottom: '1.25rem' }}>
+        <h2>Logo i sidemeny</h2>
+        <p style={{ fontSize: '0.85rem', color: 'var(--grey-600)', marginBottom: '1rem' }}>
+          Vises øverst i sidemenyen og i topplinjen. Logo skaleres automatisk til å passe i rammen.
+        </p>
+        <div className="logo-upload-preview">
+          <div className="logo-upload-preview-sidebar">
+            <ClubLogo pageContent={content} className="sidebar-logo" alt="Forhåndsvisning" />
+            <span className="logo-upload-preview-label">Slik i menyen</span>
+          </div>
+          <img
+            src={getSidebarLogoUrl(content)}
+            alt=""
+            className="logo-upload-preview-large"
+          />
+        </div>
+        <input
+          ref={logoRef}
+          type="file"
+          accept="image/*"
+          onChange={handleLogoUpload}
+          style={{ display: 'none' }}
+        />
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '1rem' }}>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => logoRef.current?.click()}
+            disabled={uploadingLogo}
+          >
+            {uploadingLogo ? 'Laster opp …' : 'Last opp ny logo'}
+          </button>
+          {content.sidebarLogoUrl !== DEFAULT_SIDEBAR_LOGO && (
+            <button type="button" className="btn btn-outline btn-sm" onClick={resetLogo}>
+              Bruk standard Tunet-logo
+            </button>
+          )}
+        </div>
+      </div>
 
       <div className="card" style={{ marginBottom: '1.25rem' }}>
         <h2>Menyikoner</h2>

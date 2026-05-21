@@ -6,18 +6,20 @@ import { computeGroupLayout, describeGroupPlan } from '../../lib/groups';
 import { MatchList } from '../../components/MatchList';
 import {
   getMatchDurationLabel,
-  countScheduleSlots,
-  slotDurationMinutes,
+  calculateScheduleEstimate,
   validateSchedule,
   generateScheduleWithMeta,
-  minTimeSlicesNeeded,
+  slotDurationMinutes,
 } from '../../lib/scheduler';
 import {
   normalizeScheduleParams,
   buildDays,
   defaultCourts,
   addDays,
+  syncAllDaysCourtTimes,
+  getCourtHallTime,
 } from '../../lib/scheduleParams';
+import type { ScheduleEstimate } from '../../lib/scheduler';
 
 export function AdminSchedule() {
   const { cup, update } = useCup();
@@ -26,22 +28,31 @@ export function AdminSchedule() {
     [cup.scheduleParams]
   );
   const [msg, setMsg] = useState('');
+  const [estimate, setEstimate] = useState<ScheduleEstimate | null>(null);
 
   const setParams = (patch: Partial<ScheduleParams>) => {
-    update({ scheduleParams: normalizeScheduleParams({ ...params, ...patch }) });
+    const next = normalizeScheduleParams({ ...params, ...patch });
+    if (patch.courts || patch.courtCount) {
+      next.days = syncAllDaysCourtTimes(next.days, next.courts);
+    }
+    update({ scheduleParams: next });
+    setEstimate(null);
   };
 
   const setCupDays = (cupDays: CupDays) => {
+    const days = buildDays(cupDays, params.days[0]);
     setParams({
       cupDays,
-      days: buildDays(cupDays, params.days[0]),
+      days: syncAllDaysCourtTimes(days, params.courts),
     });
   };
 
   const setCourtCount = (courtCount: CourtCount) => {
+    const courts = defaultCourts(courtCount);
     setParams({
       courtCount,
-      courts: defaultCourts(courtCount),
+      courts,
+      days: syncAllDaysCourtTimes(params.days, courts),
     });
   };
 
@@ -51,20 +62,44 @@ export function AdminSchedule() {
       : [...params.courts, name];
     if (selected.length > params.courtCount) return;
     if (selected.length === 0) return;
-    setParams({ courts: selected });
+    setParams({
+      courts: selected,
+      days: syncAllDaysCourtTimes(params.days, selected),
+    });
   };
 
   const updateDay = (index: number, patch: Partial<CupDaySchedule>) => {
-    const days = params.days.map((d, i) => (i === index ? { ...d, ...patch } : d));
+    let days = params.days.map((d, i) => (i === index ? { ...d, ...patch } : d));
     if (index === 0 && patch.date && params.cupDays > 1) {
       for (let i = 1; i < days.length; i++) {
         days[i] = { ...days[i], date: addDays(patch.date!, i) };
       }
     }
+    days = syncAllDaysCourtTimes(days, params.courts);
     setParams({ days });
   };
 
-  const slots = countScheduleSlots(params);
+  const updateCourtTime = (
+    dayIndex: number,
+    court: string,
+    patch: Partial<{ timeFrom: string; timeTo: string }>
+  ) => {
+    const day = params.days[dayIndex];
+    const hall = getCourtHallTime(day, court);
+    const courtTimes = (day.courtTimes ?? []).map((c) =>
+      c.court === court ? { ...c, ...patch } : c
+    );
+    if (!courtTimes.some((c) => c.court === court)) {
+      courtTimes.push({ court, ...hall, ...patch });
+    }
+    updateDay(dayIndex, { courtTimes });
+  };
+
+  const runCalculate = () => {
+    setEstimate(calculateScheduleEstimate(cup.teams, params));
+    setMsg('');
+  };
+
   const validation = useMemo(() => {
     try {
       return validateSchedule(cup.teams, params);
@@ -72,9 +107,7 @@ export function AdminSchedule() {
       console.error('validateSchedule failed', err);
       return {
         ok: false,
-        errors: [
-          'Kunne ikke sjekke kamprogrammet. Prøv å laste siden på nytt, eller sjekk lag og innstillinger.',
-        ],
+        errors: ['Kunne ikke sjekke kamprogrammet.'],
         pairingsCount: 0,
         timeSlicesCount: 0,
         slotsCount: 0,
@@ -82,10 +115,6 @@ export function AdminSchedule() {
       };
     }
   }, [cup.teams, params]);
-  const slicesNeeded = useMemo(
-    () => minTimeSlicesNeeded(cup.teams.length, validation.pairingsCount),
-    [cup.teams.length, validation.pairingsCount]
-  );
 
   const generate = async () => {
     const normalized = normalizeScheduleParams(params);
@@ -100,21 +129,20 @@ export function AdminSchedule() {
 
     if (result.matches.length === 0) {
       setMsg(
-        'Ingen kamper ble plassert. Sjekk halltid (tid fra–til) og at det er nok tid i forhold til antall kamper per lag.'
+        'Ingen kamper ble plassert. Trykk Beregn først, og sjekk halltid per bane.'
       );
       return;
     }
 
     if (result.unscheduled > 0) {
       setMsg(
-        `Ikke nok tid: ${result.unscheduled} av ${result.pairingsCount} kamper kunne ikke plasseres ` +
-          `(ingen lag spiller to kamper på rad). Legg til flere dager, lengre halltid eller flere baner.`
+        `Ikke nok tid: ${result.unscheduled} av ${result.pairingsCount} kamper kunne ikke plasseres.`
       );
       return;
     }
 
     if (result.backToBackTeams > 0) {
-      setMsg('Noen lag ble likevel satt opp med kamper for tett — prøv mer halltid.');
+      setMsg('Noen lag ble satt opp med kamper for tett — prøv mer halltid.');
       return;
     }
 
@@ -136,37 +164,10 @@ export function AdminSchedule() {
   };
 
   const teamName = (id: string) => cup.teams.find((t) => t.id === id)?.name ?? '?';
+  const slotMin = slotDurationMinutes(params);
 
   return (
     <>
-      {msg && (
-        <div
-          className={`alert ${
-            msg.startsWith('Generert ') ? 'alert-success' : 'alert-error'
-          }`}
-        >
-          {msg}
-        </div>
-      )}
-
-      {cup.teams.length >= 2 && !validation.ok && (
-        <div className="alert alert-error" style={{ marginBottom: '1rem' }}>
-          <strong>Før du genererer:</strong>
-          <ul style={{ margin: '0.5rem 0 0', paddingLeft: '1.25rem' }}>
-            {validation.errors.map((e, i) => (
-              <li key={i}>{e}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {cup.teams.length >= 2 && validation.ok && (
-        <div className="alert alert-success" style={{ marginBottom: '1rem' }}>
-          Klar til å generere: {validation.pairingsCount} kamper, {validation.timeSlicesCount}{' '}
-          tidslufter, {validation.slotsCount} kampplasser.
-        </div>
-      )}
-
       <div className="card" style={{ marginBottom: '1.5rem' }}>
         <h2>Parametere for kamprogram</h2>
 
@@ -196,70 +197,80 @@ export function AdminSchedule() {
         </div>
 
         <div className="form-group">
-          <label>Velg baner ({params.courts.length}/{params.courtCount})</label>
-          <div className="team-chip-list">
+          <label>
+            Velg baner <span className="label-hint">({params.courts.length}/{params.courtCount})</span>
+          </label>
+          <div className="court-chip-list">
             {AVAILABLE_COURTS.map((court) => {
-              const on = params.courts.includes(court);
+              const selected = params.courts.includes(court);
               return (
                 <button
                   key={court}
                   type="button"
-                  className="team-chip"
-                  style={{
-                    cursor: 'pointer',
-                    border: on ? '2px solid var(--purple)' : undefined,
-                    opacity: on ? 1 : 0.55,
-                  }}
+                  className={`court-chip ${selected ? 'court-chip--selected' : ''}`}
                   onClick={() => toggleCourt(court)}
+                  aria-pressed={selected}
                 >
+                  {selected && <span className="court-chip-check" aria-hidden>✓</span>}
                   {court}
                 </button>
               );
             })}
           </div>
+          {params.courts.length > 0 && (
+            <p className="court-selected-summary">
+              Valgt: <strong>{params.courts.join(', ')}</strong>
+            </p>
+          )}
         </div>
 
-        <h3 style={{ color: 'var(--purple)', fontSize: '1rem', margin: '1.25rem 0 0.75rem' }}>
-          Dager og halltider
-        </h3>
-        {params.days.map((day, i) => (
-          <div
-            key={i}
-            className="form-row cols-2"
-            style={{
-              marginBottom: '1rem',
-              paddingBottom: '1rem',
-              borderBottom: i < params.days.length - 1 ? '1px solid var(--grey-200)' : undefined,
-            }}
-          >
-            <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-              <label>Dag {i + 1} — dato</label>
-              <input
-                type="date"
-                value={day.date}
-                onChange={(e) => updateDay(i, { date: e.target.value })}
-              />
-            </div>
-            <div className="form-group">
-              <label>Tid fra</label>
-              <input
-                type="time"
-                value={day.timeFrom}
-                onChange={(e) => updateDay(i, { timeFrom: e.target.value })}
-              />
-            </div>
-            <div className="form-group">
-              <label>Tid til</label>
-              <input
-                type="time"
-                value={day.timeTo}
-                onChange={(e) => updateDay(i, { timeTo: e.target.value })}
-              />
-            </div>
+        <details className="schedule-days-panel" open>
+          <summary className="schedule-days-summary">Dager og halltider per bane</summary>
+          <div className="schedule-days-body">
+            {params.days.map((day, dayIndex) => (
+              <div key={day.date} className="schedule-day-block">
+                <div className="schedule-day-head">
+                  <label className="schedule-day-label">Dag {dayIndex + 1}</label>
+                  <input
+                    type="date"
+                    className="schedule-day-date"
+                    value={day.date}
+                    onChange={(e) => updateDay(dayIndex, { date: e.target.value })}
+                  />
+                </div>
+                <div className="schedule-court-times">
+                  {params.courts.map((court) => {
+                    const hall = getCourtHallTime(day, court);
+                    return (
+                      <div key={court} className="schedule-court-row">
+                        <span className="schedule-court-name">{court}</span>
+                        <input
+                          type="time"
+                          value={hall.timeFrom}
+                          onChange={(e) =>
+                            updateCourtTime(dayIndex, court, { timeFrom: e.target.value })
+                          }
+                          aria-label={`${court} tid fra`}
+                        />
+                        <span className="schedule-court-sep">–</span>
+                        <input
+                          type="time"
+                          value={hall.timeTo}
+                          onChange={(e) =>
+                            updateCourtTime(dayIndex, court, { timeTo: e.target.value })
+                          }
+                          aria-label={`${court} tid til`}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </div>
-        ))}
+        </details>
 
-        <div className="form-row cols-2" style={{ marginTop: '0.5rem' }}>
+        <div className="form-row cols-2" style={{ marginTop: '1rem' }}>
           <div className="form-group">
             <label>Kamplengde</label>
             <select
@@ -329,40 +340,10 @@ export function AdminSchedule() {
           </div>
         </div>
 
-        {params.seriesPlay && cup.teams.length >= 2 && (
-          <div
-            className="alert"
-            style={{
-              marginTop: '0.75rem',
-              background: 'var(--yellow-soft)',
-              color: 'var(--purple-dark)',
-              fontSize: '0.85rem',
-            }}
-          >
-            <strong>Gruppespill ({cup.teams.length} lag):</strong>{' '}
-            {describeGroupPlan(cup.teams.length)}
-            <br />
-            <span style={{ opacity: 0.9 }}>
-              Oppsett: {computeGroupLayout(cup.teams.length).label}
-            </span>
-          </div>
-        )}
-
-        {!params.seriesPlay && (
-          <p style={{ fontSize: '0.85rem', color: 'var(--grey-600)', marginTop: '0.5rem' }}>
-            Uten sluttspill: hvert lag spiller valgt antall kamper mot{' '}
-            <strong>forskjellige</strong> motstandere (samme lag møtes ikke to ganger).
-          </p>
-        )}
-
-        <p style={{ fontSize: '0.85rem', color: 'var(--grey-600)' }}>
-          {getMatchDurationLabel(params.matchFormat)} + {params.periodBreak} min pause mellom
-          perioder. Ca. {slotDurationMinutes(params)} min per kamp inkl. pause.{' '}
-          <strong>{slots}</strong> kampplasser totalt. Ingen lag spiller to kamper på rad
-          (minst én tidsluft mellom hver kamp).
-        </p>
-
-        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginTop: '1rem' }}>
+        <div className="schedule-actions">
+          <button type="button" className="btn btn-secondary" onClick={runCalculate}>
+            Beregn
+          </button>
           <button type="button" className="btn btn-primary" onClick={generate}>
             Generer kamprogram
           </button>
@@ -371,6 +352,62 @@ export function AdminSchedule() {
               Slett program
             </button>
           )}
+        </div>
+
+        <div className="schedule-feedback">
+          {msg && (
+            <div
+              className={`alert ${
+                msg.startsWith('Generert ') ? 'alert-success' : 'alert-error'
+              }`}
+            >
+              {msg}
+            </div>
+          )}
+
+          {estimate && (
+            <div
+              className={`alert ${estimate.fits ? 'alert-success' : 'alert-error'}`}
+            >
+              <strong>Beregning</strong>
+              <ul style={{ margin: '0.5rem 0 0', paddingLeft: '1.25rem' }}>
+                {estimate.summaryLines.map((line, i) => (
+                  <li key={i}>{line}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {cup.teams.length >= 2 && !estimate && !validation.ok && (
+            <div className="alert alert-error">
+              <strong>Før generering:</strong>
+              <ul style={{ margin: '0.5rem 0 0', paddingLeft: '1.25rem' }}>
+                {validation.errors.map((e, i) => (
+                  <li key={i}>{e}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {params.seriesPlay && cup.teams.length >= 2 && (
+            <div className="alert alert-info-soft">
+              <strong>Gruppespill ({cup.teams.length} lag):</strong>{' '}
+              {describeGroupPlan(cup.teams.length)} · {computeGroupLayout(cup.teams.length).label}
+            </div>
+          )}
+
+          {!params.seriesPlay && (
+            <p className="schedule-hint">
+              Uten sluttspill: hvert lag møter <strong>forskjellige</strong> motstandere (ingen
+              rematch).
+            </p>
+          )}
+
+          <p className="schedule-hint">
+            {getMatchDurationLabel(params.matchFormat)} + {params.periodBreak} min pause mellom
+            perioder · ca. {slotMin} min per kamp inkl. kamppause · ingen lag spiller to kamper på
+            rad.
+          </p>
         </div>
       </div>
 

@@ -13,10 +13,19 @@ export interface Team {
   name: string;
 }
 
-export interface CupDaySchedule {
-  date: string;
+export interface CourtHallTime {
+  court: string;
   timeFrom: string;
   timeTo: string;
+}
+
+export interface CupDaySchedule {
+  date: string;
+  /** Standard halltid denne dagen (brukes som utgangspunkt for nye baner) */
+  timeFrom: string;
+  timeTo: string;
+  /** Halltid per valgt bane – kan være ulik for hver bane */
+  courtTimes?: CourtHallTime[];
 }
 
 export interface Group {
@@ -115,9 +124,13 @@ export const DEFAULT_NAV_ITEMS: NavItemConfig[] = [
   { path: '/admin', label: 'Admin', icon: '⚙' },
 ];
 
+export const DEFAULT_SIDEBAR_LOGO = 'tunet-logo.png';
+
 export interface PageContent {
   heroSubtitle: string;
   participantInfo: string;
+  /** Logo øverst i sidemenyen (fil i public/ eller Supabase URL) */
+  sidebarLogoUrl: string;
   navItems: NavItemConfig[];
   theme: AppTheme;
 }
@@ -141,6 +154,7 @@ export const DEFAULT_PAGE_CONTENT: PageContent = {
     '• Husk hvit trøye og lue\n' +
     '• Kamper og resultater finner du under «Kamper» og «Tabell»\n\n' +
     'Lykke til!',
+  sidebarLogoUrl: DEFAULT_SIDEBAR_LOGO,
   navItems: DEFAULT_NAV_ITEMS,
   theme: DEFAULT_THEME,
 };
