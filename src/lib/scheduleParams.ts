@@ -178,7 +178,6 @@ export function normalizeScheduleParams(
     });
   }
 
-  const courtCount = asCourtCount(parsed.courtCount);
   const legacyCourts = parsed.courts?.length ? parsed.courts : [];
   let normalizedDays = trimmedDays.map((d) => normalizeDay(d));
 
@@ -197,8 +196,10 @@ export function normalizeScheduleParams(
 
   let courts = getActiveCourtNames(normalizedDays);
   if (courts.length === 0) {
-    courts = defaultCourts(courtCount);
+    courts = defaultCourts(asCourtCount(parsed.courtCount));
   }
+
+  const courtCount = asCourtCount(Math.min(3, Math.max(1, courts.length)));
 
   return {
     matchFormat: parsed.matchFormat ?? DEFAULT_SCHEDULE_PARAMS.matchFormat,

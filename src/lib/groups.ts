@@ -255,6 +255,26 @@ function provisionalStandings(groups: Group[]): Map<string, string[]> {
   return map;
 }
 
+function resolveSlotWithFallback(
+  slot: TeamSlot,
+  groups: Group[],
+  order: Map<string, string[]>,
+  excludeId?: string
+): string {
+  const resolved = resolveSlot(slot, groups, order);
+  if (resolved && resolved !== excludeId) return resolved;
+
+  const group = groups.find((g) => g.id === slot.groupId);
+  if (!group || group.teamIds.length === 0) return '';
+
+  const byRank = group.teamIds[slot.rank - 1];
+  if (byRank && byRank !== excludeId) return byRank;
+
+  const alt = group.teamIds.find((id) => id !== excludeId);
+  return alt ?? group.teamIds[0];
+}
+
+/** Sluttspillkamper inkluderes alltid (med etikett), også før tabell er ferdig. */
 function slotsToPairings(
   slots: PlayoffSlot[],
   groups: Group[],
@@ -262,9 +282,16 @@ function slotsToPairings(
 ): ScheduledPairing[] {
   return slots
     .map((s) => {
-      const home = resolveSlot(s.home, groups, order);
-      const away = resolveSlot(s.away, groups, order);
-      if (!home || !away || home === away) return null;
+      const home = resolveSlotWithFallback(s.home, groups, order);
+      let away = resolveSlotWithFallback(s.away, groups, order, home);
+      if (!home || !away) return null;
+      if (home === away) {
+        const awayGroup = groups.find((g) => g.id === s.away.groupId);
+        away =
+          awayGroup?.teamIds.find((id) => id !== home) ??
+          awayGroup?.teamIds[0] ??
+          away;
+      }
       return {
         home,
         away,

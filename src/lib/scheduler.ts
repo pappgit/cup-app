@@ -450,15 +450,26 @@ export function calculateScheduleEstimate(
         `Mangler ${matchesNeeded - slotsAvailable} kampplasser – leng halltid, flere baner eller flere dager.`
       );
     }
-    if (
-      params.seriesPlay &&
-      playoffPairings.length > 0 &&
-      playoffSlotsAvailable < playoffPairings.length
-    ) {
-      summaryLines.push(
-        `Mangler ${playoffPairings.length - playoffSlotsAvailable} plasser på ${PLAYOFF_COURT} til sluttspill – ` +
-          `leng halltid på ${PLAYOFF_COURT} eller flere dager.`
-      );
+    const activeCourts = params.days.flatMap((d) =>
+      AVAILABLE_COURTS.filter((c) => isCourtEnabledOnDay(d, c))
+    );
+    const uniqueCourts = [...new Set(activeCourts)];
+    if (uniqueCourts.length > 0) {
+      summaryLines.push(`Aktive spilleflater: ${uniqueCourts.join(', ')}.`);
+    }
+
+    if (params.seriesPlay && playoffPairings.length > 0) {
+      const hoyenActive = params.days.some((d) => isCourtEnabledOnDay(d, PLAYOFF_COURT));
+      if (!hoyenActive) {
+        summaryLines.push(
+          `Tips: aktiver ${PLAYOFF_COURT} i matrisen for sluttspill – kamper legges likevel inn i programmet.`
+        );
+      } else if (playoffSlotsAvailable < playoffPairings.length) {
+        summaryLines.push(
+          `Få ekstra plasser på ${PLAYOFF_COURT} (${playoffSlotsAvailable} vs ${playoffPairings.length} sluttspill) – ` +
+            `ekstra kamper får beregnet tid etter gruppespill.`
+        );
+      }
     }
   }
 
@@ -496,10 +507,6 @@ export function validateSchedule(teams: Team[], rawParams: ScheduleParams): Sche
 
   if (activeCourts.length === 0) {
     errors.push('Aktiver minst én bane med halltid i oversikten over spilleflater.');
-  } else if (activeCourts.length < params.courtCount) {
-    errors.push(
-      `Du har ${activeCourts.length} aktive bane(r), men ${params.courtCount} baner skal kunne brukes samtidig. Aktiver flere baner eller senk antall baner.`
-    );
   }
 
   if (!seriesPlay && !isGamesPerTeamPossible(teams.length, gamesPerTeam)) {
@@ -562,22 +569,6 @@ export function validateSchedule(teams: Team[], rawParams: ScheduleParams): Sche
   }
 
   const { group: groupPairings, playoff: playoffPairings } = splitPairingsByPhase(pairings);
-
-  if (seriesPlay && playoffPairings.length > 0) {
-    const hoyenActive = params.days.some((d) => isCourtEnabledOnDay(d, PLAYOFF_COURT));
-    if (!hoyenActive) {
-      errors.push(
-        `Sluttspill krever ${PLAYOFF_COURT} – aktiver den i spilleflate-matrisen med halltid.`
-      );
-    }
-    const playoffSlots = playoffSlotsFrom(slots);
-    if (playoffSlots.length < playoffPairings.length) {
-      errors.push(
-        `Ikke nok plasser på ${PLAYOFF_COURT} til sluttspill: ${playoffPairings.length} kamper, ` +
-          `${playoffSlots.length} plasser. Leng halltid på ${PLAYOFF_COURT} eller legg til dager.`
-      );
-    }
-  }
 
   if (slotsCount > 0 && slotsCount < pairings.length) {
     errors.push(
@@ -724,6 +715,36 @@ function schedulePairingsOnSlots(
   return { scheduled, remaining };
 }
 
+/** Legg inn sluttspillkamper som ikke fikk plass i matrisen (tid rett etter gruppespill). */
+function appendUnscheduledPlayoffMatches(
+  remaining: Pairing[],
+  matches: Match[],
+  notBefore: Date | undefined,
+  params: ScheduleParams
+): void {
+  if (remaining.length === 0) return;
+
+  const slotMs = slotDurationMinutes(params) * 60_000;
+  let cursor = notBefore?.getTime() ?? 0;
+
+  if (cursor === 0 && matches.length > 0) {
+    cursor =
+      Math.max(...matches.map((m) => new Date(m.startTime).getTime())) + slotMs;
+  }
+  if (cursor === 0) {
+    const firstDay = params.days[0]?.date ?? '2026-06-01';
+    const [y, mo, d] = firstDay.split('-').map(Number);
+    cursor = new Date(y, mo - 1, d, 17, 0).getTime();
+  }
+
+  for (const p of remaining) {
+    matches.push(
+      pairingToMatch(p, formatTime(new Date(cursor)), PLAYOFF_COURT, matches.length + 1)
+    );
+    cursor += slotMs;
+  }
+}
+
 export function generateScheduleWithMeta(
   teams: Team[],
   rawParams: ScheduleParams
@@ -788,8 +809,14 @@ export function generateScheduleWithMeta(
     matches.length + 1
   );
 
-  const unscheduled =
-    groupResult.remaining.length + playoffResult.remaining.length;
+  appendUnscheduledPlayoffMatches(
+    playoffResult.remaining,
+    matches,
+    notBefore,
+    params
+  );
+
+  const unscheduled = groupResult.remaining.length;
 
   const backToBack = detectBackToBack(matches, params);
 

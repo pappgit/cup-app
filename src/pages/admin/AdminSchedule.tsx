@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useCup } from '../../hooks/useCup';
 import { useCupMatches } from '../../hooks/useCupMatches';
-import type { CupDaySchedule, CourtCount, CupDays, ScheduleParams } from '../../types';
+import type { CupDaySchedule, CupDays, ScheduleParams } from '../../types';
 import { DEFAULT_SCHEDULE_PARAMS } from '../../types';
 import {
   PLAYOFF_COURT,
@@ -51,10 +51,6 @@ export function AdminSchedule() {
   const setCupDays = (cupDays: CupDays) => {
     const days = buildDays(cupDays, params.days[0]);
     setParams({ cupDays, days });
-  };
-
-  const setCourtCount = (courtCount: CourtCount) => {
-    setParams({ courtCount });
   };
 
   const handleDaysChange = (days: CupDaySchedule[]) => {
@@ -154,32 +150,20 @@ export function AdminSchedule() {
       <div className="card" style={{ marginBottom: '1.5rem' }}>
         <h2>Parametere for kamprogram</h2>
 
-        <div className="form-row cols-2">
-          <div className="form-group">
-            <label>Antall cup-dager</label>
-            <select
-              value={params.cupDays}
-              onChange={(e) => setCupDays(Number(e.target.value) as CupDays)}
-            >
-              <option value={1}>1 dag</option>
-              <option value={2}>2 dager</option>
-              <option value={3}>3 dager</option>
-            </select>
-          </div>
-          <div className="form-group">
-            <label>Antall baner samtidig</label>
-            <select
-              value={params.courtCount}
-              onChange={(e) => setCourtCount(Number(e.target.value) as CourtCount)}
-            >
-              <option value={1}>1 bane om gangen</option>
-              <option value={2}>2 baner om gangen</option>
-              <option value={3}>3 baner om gangen</option>
-            </select>
-            <p className="label-hint" style={{ marginTop: '0.35rem' }}>
-              Maks antall kamper som kan spilles parallelt i samme tidsluft.
-            </p>
-          </div>
+        <div className="form-group">
+          <label>Antall cup-dager</label>
+          <select
+            value={params.cupDays}
+            onChange={(e) => setCupDays(Number(e.target.value) as CupDays)}
+          >
+            <option value={1}>1 dag</option>
+            <option value={2}>2 dager</option>
+            <option value={3}>3 dager</option>
+          </select>
+          <p className="label-hint" style={{ marginTop: '0.35rem' }}>
+            Kapasitet beregnes ut fra hvilke spilleflater som er avhuket i matrisen under
+            (halltid per bane og dag).
+          </p>
         </div>
 
         <div className="card court-matrix-card">
@@ -347,12 +331,10 @@ export function AdminSchedule() {
             legges inn.
           </p>
           <MatchList
-            matches={[...cupMatches]
-              .filter((m) => m.startTime)
-              .sort(
-                (a, b) =>
-                  new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
-              )}
+            matches={[...cupMatches].sort(
+              (a, b) =>
+                new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+            )}
             teamName={teamName}
             showDayHeaders
           />
