@@ -984,7 +984,8 @@ img {
   letter-spacing: -0.03em;
 }
 
-.hero p {
+.hero p,
+.hero-lead {
   margin: 0;
   opacity: 0.92;
   position: relative;
@@ -995,25 +996,11 @@ img {
 }
 
 .hero-team-picker {
-  margin-bottom: 1.35rem;
-}
-
-.hero-team-picker-title {
-  margin: 0 0 0.5rem;
-  font-size: 1.25rem;
-  font-weight: 800;
+  margin-top: 1.25rem;
+  padding-top: 1.15rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.22);
   position: relative;
   z-index: 1;
-  letter-spacing: -0.02em;
-}
-
-.hero-team-picker-desc {
-  margin: 0 0 1rem;
-  opacity: 0.92;
-  font-size: 0.9rem;
-  position: relative;
-  z-index: 1;
-  line-height: 1.45;
 }
 
 .hero-team-picker-active {
@@ -1061,10 +1048,6 @@ img {
 
   .hero h1 {
     font-size: 1.85rem;
-  }
-
-  .hero-team-picker-title {
-    font-size: 1.35rem;
   }
 }
 

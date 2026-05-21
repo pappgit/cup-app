@@ -12,12 +12,11 @@ export function HomePage() {
 
   return (
     <>
-      <section className="hero">
+      <section className="hero" aria-label="Velkommen">
         <h1>Velkommen til {cup.name}!</h1>
-        {content.heroSubtitle && <p>{content.heroSubtitle}</p>}
+        {content.heroSubtitle && <p className="hero-lead">{content.heroSubtitle}</p>}
+        <HomeTeamPicker />
       </section>
-
-      <HomeTeamPicker />
 
       <FeaturedSponsorFrame sponsor={forsideSponsor} />
 

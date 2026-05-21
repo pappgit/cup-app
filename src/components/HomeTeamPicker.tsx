@@ -13,12 +13,7 @@ export function HomeTeamPicker() {
     : null;
 
   return (
-    <section className="hero hero-team-picker" aria-label="Velg lag">
-      <h2 className="hero-team-picker-title">Velg lag</h2>
-      <p className="hero-team-picker-desc">
-        Velg laget ditt – da vises riktige kamper i Kamper
-        {cup.scheduleParams?.seriesPlay ? ' og poeng i Tabell' : ''}.
-      </p>
+    <div className="hero-team-picker" aria-label="Velg lag">
       <ScheduleTeamFilter
         teams={cup.teams}
         value={teamId}
@@ -34,6 +29,6 @@ export function HomeTeamPicker() {
           Valgt: <strong>{selectedName}</strong>
         </p>
       )}
-    </section>
+    </div>
   );
 }
