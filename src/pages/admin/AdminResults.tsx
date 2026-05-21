@@ -1,7 +1,11 @@
 import { useState } from 'react';
 import { MatchCard } from '../../components/MatchCard';
 import { useCup } from '../../hooks/useCup';
-import { refreshPlayoffTeams } from '../../lib/groups';
+import {
+  applyPlayoffTeamUpdates,
+  resolveGroupsForCup,
+} from '../../lib/groups';
+import { useCupMatches } from '../../hooks/useCupMatches';
 import { normalizeScheduleParams } from '../../lib/scheduleParams';
 import { DEFAULT_SCHEDULE_PARAMS, type Match } from '../../types';
 
@@ -88,37 +92,33 @@ function ResultRow({
 
 export function AdminResults() {
   const { cup, update } = useCup();
+  const cupMatches = useCupMatches();
   const params = normalizeScheduleParams(cup.scheduleParams ?? DEFAULT_SCHEDULE_PARAMS);
-  const groups = params.groups ?? [];
+  const groups = resolveGroupsForCup(cup.teams, params);
   const teamName = (id: string) => cup.teams.find((t) => t.id === id)?.name ?? '?';
 
   const saveScore = async (matchId: string, homeRaw: string, awayRaw: string) => {
     const homeScore = homeRaw === '' ? null : Math.max(0, Number(homeRaw));
     const awayScore = awayRaw === '' ? null : Math.max(0, Number(awayRaw));
-    const matches = cup.matches.map((m) =>
+    let matches = cup.matches.map((m) =>
       m.id === matchId ? { ...m, homeScore, awayScore } : m
     );
-    await update({ matches });
-  };
-
-  const refreshPlayoffs = async () => {
-    if (groups.length === 0) return;
-    const matches = refreshPlayoffTeams(groups, cup.matches, cup.teams);
+    matches = applyPlayoffTeamUpdates(matches, cup.teams, groups, params.seriesPlay);
     await update({ matches });
   };
 
   const sortByTime = (list: Match[]) =>
     [...list].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
 
-  const groupMatches = sortByTime(cup.matches.filter((m) => m.phase === 'group'));
+  const groupMatches = sortByTime(cupMatches.filter((m) => m.phase === 'group'));
   const playoffMatches = sortByTime(
-    cup.matches.filter((m) => m.phase === 'crossover' || m.phase === 'quarterfinal')
+    cupMatches.filter((m) => m.phase === 'crossover' || m.phase === 'quarterfinal')
   );
   const friendlyMatches = sortByTime(
-    cup.matches.filter((m) => !m.phase || m.phase === 'friendly')
+    cupMatches.filter((m) => !m.phase || m.phase === 'friendly')
   );
 
-  if (cup.matches.length === 0) {
+  if (cupMatches.length === 0) {
     return <div className="empty-state">Generer kamprogram først under Kamprogram.</div>;
   }
 
@@ -129,20 +129,10 @@ export function AdminResults() {
           Resultater
         </h2>
         <p className="page-subtitle">
-          Legg inn mål for hjemme- og bortelag. Ved sluttspill: oppdater sluttspill når gruppene er ferdige.
+          Legg inn mål for hjemme- og bortelag. Sluttspill i kamprogrammet oppdateres automatisk
+          når resultater og tabell endres.
         </p>
       </header>
-
-      {params.seriesPlay && playoffMatches.length > 0 && (
-        <button
-          type="button"
-          className="btn btn-outline"
-          style={{ marginBottom: '1.25rem', width: '100%' }}
-          onClick={refreshPlayoffs}
-        >
-          Oppdater sluttspill fra tabell
-        </button>
-      )}
 
       {groupMatches.length > 0 && (
         <div className="card" style={{ marginBottom: '1.25rem' }}>

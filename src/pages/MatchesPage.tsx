@@ -2,23 +2,25 @@ import { useMemo } from 'react';
 import { MatchList } from '../components/MatchList';
 import { ScheduleTeamFilter } from '../components/ScheduleTeamFilter';
 import { useCup } from '../hooks/useCup';
+import { useCupMatches } from '../hooks/useCupMatches';
 import { useFavoriteTeam } from '../hooks/useFavoriteTeam';
 
 export function MatchesPage() {
   const { cup } = useCup();
+  const cupMatches = useCupMatches();
   const { teamId: viewFilter, setFavorite: setViewFilter } = useFavoriteTeam();
 
   const teamName = (id: string) => cup.teams.find((t) => t.id === id)?.name ?? 'Ukjent lag';
 
   const matches = useMemo(() => {
-    const sorted = [...cup.matches].sort(
+    const sorted = [...cupMatches].sort(
       (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
     );
     if (!viewFilter) return sorted;
     return sorted.filter(
       (m) => m.homeTeamId === viewFilter || m.awayTeamId === viewFilter
     );
-  }, [cup.matches, viewFilter]);
+  }, [cupMatches, viewFilter]);
 
   return (
     <>

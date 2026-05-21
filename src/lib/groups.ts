@@ -1,4 +1,4 @@
-import type { Group, Match, MatchPhase, Team } from '../types';
+import type { Group, Match, MatchPhase, ScheduleParams, Team } from '../types';
 import { bestThirdPlaces, groupLabel, rankInGroup } from './standings';
 
 /** Sluttspill spilles alltid på denne hallen. */
@@ -394,6 +394,27 @@ function resolveRankSlot(
   const group = groups.find((g) => g.id === groupId);
   if (!group) return null;
   return rankInGroup(group, matches, teams, rank);
+}
+
+/** Grupper fra lagrede parametere, eller rekonstruert fra lagliste. */
+export function resolveGroupsForCup(teams: Team[], params: ScheduleParams): Group[] {
+  if (params.groups && params.groups.length > 0) {
+    return params.groups;
+  }
+  if (teams.length < 2) return [];
+  const layout = computeGroupLayout(teams.length);
+  return assignTeamsToGroups(teams, layout);
+}
+
+/** Oppdater hjemme/borte-lag på sluttspill ut fra gjeldende tabell. */
+export function applyPlayoffTeamUpdates(
+  matches: Match[],
+  teams: Team[],
+  groups: Group[],
+  seriesPlay: boolean
+): Match[] {
+  if (!seriesPlay || groups.length === 0) return matches;
+  return refreshPlayoffTeams(groups, matches, teams);
 }
 
 /** Oppdater sluttspillkamper ut fra faktisk tabell (etter gruppespill er ferdig). */

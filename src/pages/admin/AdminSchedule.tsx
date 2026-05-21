@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react';
 import { useCup } from '../../hooks/useCup';
+import { useCupMatches } from '../../hooks/useCupMatches';
 import type { CupDaySchedule, CourtCount, CupDays, ScheduleParams } from '../../types';
 import { DEFAULT_SCHEDULE_PARAMS } from '../../types';
 import {
   PLAYOFF_COURT,
+  applyPlayoffTeamUpdates,
   computeGroupLayout,
   describeGroupPlan,
 } from '../../lib/groups';
@@ -27,6 +29,7 @@ import type { ScheduleEstimate } from '../../lib/scheduler';
 
 export function AdminSchedule() {
   const { cup, update } = useCup();
+  const cupMatches = useCupMatches();
   const params = useMemo(
     () => normalizeScheduleParams(cup.scheduleParams ?? DEFAULT_SCHEDULE_PARAMS),
     [cup.scheduleParams]
@@ -119,8 +122,15 @@ export function AdminSchedule() {
       return;
     }
 
+    const matches = applyPlayoffTeamUpdates(
+      result.matches,
+      cup.teams,
+      result.groups,
+      normalized.seriesPlay
+    );
+
     await update({
-      matches: result.matches,
+      matches,
       scheduleParams: {
         ...normalized,
         groups: result.groups.length > 0 ? result.groups : undefined,
@@ -326,14 +336,18 @@ export function AdminSchedule() {
         </div>
       </div>
 
-      {cup.matches.length > 0 && (
+      {cupMatches.length > 0 && (
         <div className="card">
           <h2>
             Kamprogram
-            <span className="match-count-badge">{cup.matches.length}</span>
+            <span className="match-count-badge">{cupMatches.length}</span>
           </h2>
+          <p className="schedule-hint" style={{ marginTop: 0 }}>
+            Inkluderer sluttspill med tid og bane. Lag i sluttspill oppdateres når resultater
+            legges inn.
+          </p>
           <MatchList
-            matches={[...cup.matches]
+            matches={[...cupMatches]
               .filter((m) => m.startTime)
               .sort(
                 (a, b) =>
