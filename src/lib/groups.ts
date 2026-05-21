@@ -1,5 +1,10 @@
 import type { Group, Match, MatchPhase, ScheduleParams, Team } from '../types';
-import { bestThirdPlaces, groupLabel, rankInGroup } from './standings';
+import { generatePlayoffSlots } from './playoffs';
+import type { PlayoffSlot, TeamSlot } from './playoffs';
+import { GLOBAL_GROUP_ID, provisionalGlobalOrder, teamAtGlobalRank } from './ranking';
+import { groupLabel, rankInGroup } from './standings';
+
+export type { PlayoffSlot, TeamSlot } from './playoffs';
 
 /** Sluttspill spilles alltid på denne hallen. */
 export const PLAYOFF_COURT = 'Høyenhallen';
@@ -21,6 +26,16 @@ export function playoffMatchLabel(
 export function parsePlayoffLabel(
   label: string
 ): { home: TeamSlot; away: TeamSlot; thirdPlaces?: [number, number] } | null {
+  const globalMatch = label.match(
+    /Nr\s*(\d+)\s+totalt\s+vs\s+Nr\s*(\d+)\s+totalt/i
+  );
+  if (globalMatch) {
+    return {
+      home: { groupId: GLOBAL_GROUP_ID, rank: Number(globalMatch[1]) },
+      away: { groupId: GLOBAL_GROUP_ID, rank: Number(globalMatch[2]) },
+    };
+  }
+
   const standard = label.match(
     /Nr\s*(\d+)\s+i\s+gruppe\s*([A-C])\s+vs\s+Nr\s*(\d+)\s+i\s+gruppe\s*([A-C])/i
   );
@@ -28,14 +43,6 @@ export function parsePlayoffLabel(
     return {
       home: { groupId: standard[2].toUpperCase(), rank: Number(standard[1]) },
       away: { groupId: standard[4].toUpperCase(), rank: Number(standard[3]) },
-    };
-  }
-
-  if (/beste\s+3/i.test(label)) {
-    return {
-      home: { groupId: 'A', rank: 3 },
-      away: { groupId: 'B', rank: 3 },
-      thirdPlaces: [0, 1],
     };
   }
 
@@ -50,27 +57,27 @@ export interface ScheduledPairing {
   label?: string;
 }
 
-export interface TeamSlot {
-  groupId: string;
-  rank: number;
-}
-
 export interface GroupLayout {
   sizes: number[];
   groupCount: number;
   label: string;
 }
 
-export interface PlayoffSlot {
-  home: TeamSlot;
-  away: TeamSlot;
-  phase: MatchPhase;
-  label: string;
-  /** Spesiell oppløsning for 3. plass på tvers av grupper */
-  resolveThirdPlaces?: [number, number];
+function distributeGroupSizes(teamCount: number, groupCount: number): number[] {
+  const base = Math.floor(teamCount / groupCount);
+  const remainder = teamCount % groupCount;
+  return Array.from({ length: groupCount }, (_, i) => base + (i < remainder ? 1 : 0));
 }
 
-/** Eksplisitt gruppeoppsett per antall lag. */
+function pickGroupCount(teamCount: number): number {
+  if (teamCount < 4) return 1;
+  if (teamCount <= 6) return 2;
+  if (teamCount <= 15) return 3;
+  if (teamCount <= 20) return 4;
+  return Math.min(8, Math.ceil(teamCount / 4));
+}
+
+/** Gruppeoppsett – jevn fordeling av lag. */
 export function computeGroupLayout(teamCount: number): GroupLayout {
   const known: Record<number, number[]> = {
     4: [4],
@@ -97,22 +104,9 @@ export function computeGroupLayout(teamCount: number): GroupLayout {
     return { sizes: [teamCount], groupCount: 1, label: `1 gruppe (${teamCount} lag)` };
   }
 
-  if (teamCount % 3 === 0) {
-    const s = teamCount / 3;
-    const sizes = [s, s, s];
-    return { sizes, groupCount: 3, label: formatLayoutLabel(sizes) };
-  }
-
-  if (teamCount % 2 === 0) {
-    const s = teamCount / 2;
-    const sizes = [s, s];
-    return { sizes, groupCount: 2, label: formatLayoutLabel(sizes) };
-  }
-
-  const base = Math.floor(teamCount / 3);
-  const rem = teamCount % 3;
-  const sizes = Array.from({ length: 3 }, (_, i) => base + (i < rem ? 1 : 0));
-  return { sizes, groupCount: 3, label: formatLayoutLabel(sizes) };
+  const groupCount = pickGroupCount(teamCount);
+  const sizes = distributeGroupSizes(teamCount, groupCount);
+  return { sizes, groupCount, label: formatLayoutLabel(sizes) };
 }
 
 function formatLayoutLabel(sizes: number[]): string {
@@ -136,21 +130,30 @@ export function describePlayoffRules(layout: GroupLayout): string {
   if (groupCount === 2) {
     const n = Math.min(...sizes);
     return (
-      `Etter gruppespill: ${n} finale(r) — lik plassering møtes ` +
-      `(Nr 1 i gruppe A vs Nr 1 i B, Nr 2 vs Nr 2, osv.). Alle lag får én ekstra kamp. ` +
+      `Etter gruppespill: ${n} plasseringskamp(er) — lik plassering møtes ` +
+      `(Nr 1 i A vs Nr 1 i B, osv.). Alle lag får én ekstra kamp. ` +
       `Sluttspill kun i ${PLAYOFF_COURT}.`
     );
   }
 
-  if (sizes.every((s) => s >= 4)) {
+  if (groupCount === 3) {
     return (
-      'Etter gruppespill: kvartfinaler (topp 2 per gruppe + 2 beste 3. plass). ' +
+      'Etter gruppespill: global rangering (poeng per kamp). Topp 4: semifinale (1–4, 2–3). ' +
+      'Deretter plasseringskamper for 5.–8., 9.–siste. Sluttspill kun i ' +
+      PLAYOFF_COURT +
+      '.'
+    );
+  }
+
+  if (groupCount === 4) {
+    return (
+      'Etter gruppespill: kvartfinaler (1A–2B, 1C–2D, osv.). ' +
       `Sluttspill kun i ${PLAYOFF_COURT}.`
     );
   }
 
   return (
-    'Etter gruppespill: krysskamper mellom gruppene (topp 2). ' +
+    'Etter gruppespill: global rangering, topp 8 til kvartfinale. ' +
     `Sluttspill kun i ${PLAYOFF_COURT}.`
   );
 }
@@ -239,8 +242,12 @@ export function roundRobinPairings(groupId: string, teamIds: string[]): Schedule
 function resolveSlot(
   slot: TeamSlot,
   groups: Group[],
-  provisionalOrder: Map<string, string[]>
+  provisionalOrder: Map<string, string[]>,
+  globalOrder: string[]
 ): string | null {
+  if (slot.groupId === GLOBAL_GROUP_ID) {
+    return globalOrder[slot.rank - 1] ?? null;
+  }
   const group = groups.find((g) => g.id === slot.groupId);
   if (!group) return null;
   const order = provisionalOrder.get(group.id) ?? group.teamIds;
@@ -259,10 +266,18 @@ function resolveSlotWithFallback(
   slot: TeamSlot,
   groups: Group[],
   order: Map<string, string[]>,
+  globalOrder: string[],
   excludeId?: string
 ): string {
-  const resolved = resolveSlot(slot, groups, order);
+  const resolved = resolveSlot(slot, groups, order, globalOrder);
   if (resolved && resolved !== excludeId) return resolved;
+
+  if (slot.groupId === GLOBAL_GROUP_ID) {
+    const id = globalOrder[slot.rank - 1];
+    if (id && id !== excludeId) return id;
+    const alt = globalOrder.find((tid) => tid !== excludeId);
+    return alt ?? globalOrder[0] ?? '';
+  }
 
   const group = groups.find((g) => g.id === slot.groupId);
   if (!group || group.teamIds.length === 0) return '';
@@ -278,12 +293,13 @@ function resolveSlotWithFallback(
 function slotsToPairings(
   slots: PlayoffSlot[],
   groups: Group[],
-  order: Map<string, string[]>
+  order: Map<string, string[]>,
+  globalOrder: string[]
 ): ScheduledPairing[] {
   return slots
     .map((s) => {
-      const home = resolveSlotWithFallback(s.home, groups, order);
-      let away = resolveSlotWithFallback(s.away, groups, order, home);
+      const home = resolveSlotWithFallback(s.home, groups, order, globalOrder);
+      let away = resolveSlotWithFallback(s.away, groups, order, globalOrder, home);
       if (!home || !away) return null;
       if (home === away) {
         const awayGroup = groups.find((g) => g.id === s.away.groupId);
@@ -302,80 +318,13 @@ function slotsToPairings(
     .filter((p): p is ScheduledPairing => p !== null);
 }
 
-/** Sluttspillkamper ut fra gruppeoppsett. */
-export function buildPlayoffSlots(groups: Group[], layout: GroupLayout): PlayoffSlot[] {
-  const sizes = groups.map((g) => g.teamIds.length);
-  const [ga, gb, gc] = groups;
-
-  if (layout.groupCount === 2 && ga && gb) {
-    const rounds = Math.min(sizes[0], sizes[1]);
-    return Array.from({ length: rounds }, (_, i) => {
-      const rank = i + 1;
-      return {
-        home: { groupId: ga.id, rank },
-        away: { groupId: gb.id, rank },
-        phase: 'crossover' as MatchPhase,
-        label: playoffMatchLabel(rank, ga.id, rank, gb.id),
-      };
-    });
-  }
-
-  if (layout.groupCount === 3 && ga && gb && gc) {
-    const allFourPlus = sizes.every((s) => s >= 4);
-
-    if (allFourPlus) {
-      return [
-        {
-          home: { groupId: 'A', rank: 1 },
-          away: { groupId: 'B', rank: 2 },
-          phase: 'quarterfinal',
-          label: playoffMatchLabel(1, 'A', 2, 'B'),
-        },
-        {
-          home: { groupId: 'C', rank: 1 },
-          away: { groupId: 'A', rank: 2 },
-          phase: 'quarterfinal',
-          label: playoffMatchLabel(1, 'C', 2, 'A'),
-        },
-        {
-          home: { groupId: 'B', rank: 1 },
-          away: { groupId: 'C', rank: 2 },
-          phase: 'quarterfinal',
-          label: playoffMatchLabel(1, 'B', 2, 'C'),
-        },
-        {
-          home: { groupId: 'A', rank: 3 },
-          away: { groupId: 'B', rank: 3 },
-          phase: 'quarterfinal',
-          label: 'Nr 3 i gruppe A vs Nr 3 i gruppe B (beste 3. plass)',
-          resolveThirdPlaces: [0, 1],
-        },
-      ];
-    }
-
-    return [
-      {
-        home: { groupId: 'A', rank: 1 },
-        away: { groupId: 'B', rank: 2 },
-        phase: 'crossover',
-        label: playoffMatchLabel(1, 'A', 2, 'B'),
-      },
-      {
-        home: { groupId: 'B', rank: 1 },
-        away: { groupId: 'C', rank: 2 },
-        phase: 'crossover',
-        label: playoffMatchLabel(1, 'B', 2, 'C'),
-      },
-      {
-        home: { groupId: 'C', rank: 1 },
-        away: { groupId: 'A', rank: 2 },
-        phase: 'crossover',
-        label: playoffMatchLabel(1, 'C', 2, 'A'),
-      },
-    ];
-  }
-
-  return [];
+/** Sluttspillkamper ut fra gruppeoppsett (delegerer til playoffs-modulen). */
+export function buildPlayoffSlots(
+  groups: Group[],
+  layout: GroupLayout,
+  teamCount: number
+): PlayoffSlot[] {
+  return generatePlayoffSlots(groups, layout.groupCount, teamCount);
 }
 
 export function generateSeriesPairings(teams: Team[]): {
@@ -397,7 +346,15 @@ export function generateSeriesPairings(teams: Team[]): {
 
   if (layout.groupCount > 1) {
     const order = provisionalStandings(groups);
-    pairings.push(...slotsToPairings(buildPlayoffSlots(groups, layout), groups, order));
+    const globalOrder = provisionalGlobalOrder(groups);
+    pairings.push(
+      ...slotsToPairings(
+        buildPlayoffSlots(groups, layout, teams.length),
+        groups,
+        order,
+        globalOrder
+      )
+    );
   }
 
   return { groups, pairings, layout };
@@ -408,7 +365,7 @@ export function countPlayoffPairings(teams: Team[]): number {
   const layout = computeGroupLayout(teams.length);
   if (layout.groupCount <= 1) return 0;
   const groups = assignTeamsToGroups(teams, layout);
-  return buildPlayoffSlots(groups, layout).length;
+  return buildPlayoffSlots(groups, layout, teams.length).length;
 }
 
 function resolveRankSlot(
@@ -456,10 +413,11 @@ export function refreshPlayoffTeams(
     const parsed = parsePlayoffLabel(m.label);
     if (!parsed) return m;
 
-    if (parsed.thirdPlaces) {
-      const thirds = bestThirdPlaces(groups, matches, teams, 2);
-      if (thirds.length < 2) return m;
-      return { ...m, homeTeamId: thirds[0], awayTeamId: thirds[1], court: PLAYOFF_COURT };
+    if (parsed.home.groupId === GLOBAL_GROUP_ID) {
+      const home = teamAtGlobalRank(groups, matches, teams, parsed.home.rank);
+      const away = teamAtGlobalRank(groups, matches, teams, parsed.away.rank);
+      if (!home || !away) return m;
+      return { ...m, homeTeamId: home, awayTeamId: away, court: PLAYOFF_COURT };
     }
 
     const home = resolveRankSlot(groups, matches, teams, parsed.home.groupId, parsed.home.rank);
